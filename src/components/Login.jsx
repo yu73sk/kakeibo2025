@@ -24,7 +24,12 @@ function Login({ onLogin }) {
         if (error) throw error
 
         if (data.user) {
-          alert('登録が完了しました。ログインしてください。')
+          // メール確認が必要な場合
+          if (data.user.email_confirmed_at === null) {
+            alert('登録が完了しました。メールアドレスに送信された確認メールのリンクをクリックして、メールアドレスを確認してください。確認後、ログインできます。')
+          } else {
+            alert('登録が完了しました。ログインしてください。')
+          }
           setIsSignUp(false)
           setPassword('')
         }

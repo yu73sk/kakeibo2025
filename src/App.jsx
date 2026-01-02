@@ -31,10 +31,16 @@ function App() {
   useEffect(() => {
     // 現在のセッションを取得
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('初期セッション取得:', session?.user?.id)
       setSession(session)
       setLoading(false)
       if (session) {
         loadUserSettings()
+        loadTransactions()
+      } else {
+        // セッションがない場合、状態をクリア
+        setTransactions([])
+        setMonthlyBudgetSetting(0)
       }
     })
 
@@ -42,11 +48,14 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('認証状態変更:', _event, session?.user?.id)
       setSession(session)
       if (session) {
+        // セッションが変更されたら、データを再読み込み
         loadTransactions()
         loadUserSettings()
       } else {
+        // ログアウト時は状態をクリア
         setTransactions([])
         setMonthlyBudgetSetting(0)
       }
@@ -104,13 +113,32 @@ function App() {
 
   const loadTransactions = async () => {
     try {
+      // セッションを明示的に取得
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !session.user) {
+        console.log('セッションなし、取引履歴をクリア')
+        setTransactions([])
+        return
+      }
+
+      console.log('取引履歴読み込み - ユーザーID:', session.user.id)
+      console.log('取引履歴読み込み - メール:', session.user.email)
+
+      // 現在のユーザーのIDでフィルタリング
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
+        .eq('user_id', session.user.id)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('取引履歴読み込みエラー:', error)
+        throw error
+      }
+
+      console.log('取得した取引履歴数:', data?.length || 0)
+      console.log('取得した取引履歴のuser_id:', data?.map(t => t.user_id) || [])
       setTransactions(data || [])
     } catch (error) {
       console.error('取引履歴の読み込みエラー:', error)
