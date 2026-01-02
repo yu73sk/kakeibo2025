@@ -321,6 +321,75 @@ function App() {
   const totalActual = dailyData.reduce((sum, day) => sum + day.actual, 0)
   const totalDifference = totalActual - totalBudget
 
+  // 週次予実進捗データを生成
+  const getWeeklyProgressData = (year, month) => {
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const weeks = []
+    
+    // 週の定義
+    const weekRanges = [
+      { start: 1, end: 7, label: '1W' },
+      { start: 8, end: 14, label: '2W' },
+      { start: 15, end: 21, label: '3W' },
+      { start: 22, end: 28, label: '4W' },
+      { start: 29, end: daysInMonth, label: '5W' },
+    ]
+
+    let cumulativeBudget = 0
+    let cumulativeActual = 0
+
+    weekRanges.forEach((week, index) => {
+      // その週の予算と実績を計算
+      let weekBudget = 0
+      let weekActual = 0
+
+      for (let day = week.start; day <= Math.min(week.end, daysInMonth); day++) {
+        const date = new Date(year, month - 1, day)
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        
+        // 予算を計算
+        weekBudget += calculateDailyBudget(date, monthlyBudgetSetting)
+        
+        // 実績を計算
+        weekActual += transactions
+          .filter(t => t.date === dateStr)
+          .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+      }
+
+      // 累積値を更新
+      cumulativeBudget += weekBudget
+      cumulativeActual += weekActual
+
+      // 進捗率を計算（累積実績 ÷ 累積予算）
+      const progressRate = cumulativeBudget > 0 ? (cumulativeActual / cumulativeBudget) * 100 : 0
+
+      // 残金を計算
+      const remaining = cumulativeBudget - cumulativeActual
+
+      // 状況を判定（進捗率が100%を超えている場合はビハインド）
+      const status = progressRate > 100 ? 'ビハインド' : '予算内'
+
+      weeks.push({
+        period: week.label,
+        budget: weekBudget,
+        actual: weekActual,
+        cumulativeBudget,
+        cumulativeActual,
+        progressRate,
+        remaining,
+        status,
+      })
+    })
+
+    return weeks
+  }
+
+  // 今月の週次データを取得
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const currentMonth = today.getMonth() + 1
+  const weeklyData = getWeeklyProgressData(currentYear, currentMonth)
+
   // 表示可能な月のリストを生成（過去6ヶ月から未来3ヶ月まで）
   const getAvailableMonths = () => {
     const months = []
@@ -596,6 +665,100 @@ function App() {
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* 週次予実進捗 */}
+        <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">週次予実進捗</h2>
+          
+          {/* 当月 */}
+          <div className="mb-4">
+            <div className="bg-gray-800 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
+              当月
+            </div>
+            <div className="border border-gray-200 rounded-b-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-2 px-4 font-semibold text-gray-700">期間</th>
+                    <th className="text-left py-2 px-4 font-semibold text-gray-700">状況</th>
+                    <th className="text-right py-2 px-4 font-semibold text-gray-700">期間使用率</th>
+                    <th className="text-right py-2 px-4 font-semibold text-gray-700">残金</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-gray-200">
+                    <td className="py-2 px-4 text-gray-800">今月</td>
+                    <td className="py-2 px-4">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        monthlyActual > monthlyBudget
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {monthlyActual > monthlyBudget ? 'ビハインド' : '予算内'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-4 text-right text-gray-800">
+                      {monthlyBudget > 0 ? ((monthlyActual / monthlyBudget) * 100).toFixed(0) : 0}%
+                    </td>
+                    <td className={`py-2 px-4 text-right font-medium ${
+                      monthlyBudget - monthlyActual < 0 ? 'text-red-600' : 'text-gray-800'
+                    }`}>
+                      {formatCurrency(monthlyBudget - monthlyActual)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 週次 */}
+          <div>
+            <div className="bg-gray-600 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
+              週次
+            </div>
+            <div className="border border-gray-200 rounded-b-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-2 px-4 font-semibold text-gray-700">期間</th>
+                    <th className="text-left py-2 px-4 font-semibold text-gray-700">状況</th>
+                    <th className="text-right py-2 px-4 font-semibold text-gray-700">期間使用率</th>
+                    <th className="text-right py-2 px-4 font-semibold text-gray-700">残金</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeklyData.map((week, index) => (
+                    <tr
+                      key={week.period}
+                      className={`border-t border-gray-200 ${
+                        index === weeklyData.length - 1 ? '' : ''
+                      }`}
+                    >
+                      <td className="py-2 px-4 text-gray-800">{week.period}</td>
+                      <td className="py-2 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          week.status === 'ビハインド'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {week.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 text-right text-gray-800">
+                        {week.progressRate.toFixed(0)}%
+                      </td>
+                      <td className={`py-2 px-4 text-right font-medium ${
+                        week.remaining < 0 ? 'text-red-600' : 'text-gray-800'
+                      }`}>
+                        {formatCurrency(week.remaining)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
