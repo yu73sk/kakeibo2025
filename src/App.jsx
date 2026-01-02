@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
+import Settings from './components/Settings'
 import { 
   getTodayBudget, 
   calculateMonthlyCumulativeBudget, 
@@ -11,6 +12,8 @@ import {
 function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
+  const [monthlyBudgetSetting, setMonthlyBudgetSetting] = useState(0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [amount, setAmount] = useState('')
   const [transactions, setTransactions] = useState([])
@@ -28,6 +31,9 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
+      if (session) {
+        loadUserSettings()
+      }
     })
 
     // 認証状態の変更を監視
@@ -37,21 +43,50 @@ function App() {
       setSession(session)
       if (session) {
         loadTransactions()
+        loadUserSettings()
       } else {
         setTransactions([])
+        setMonthlyBudgetSetting(0)
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  // 今日の予算を計算
-  useEffect(() => {
-    if (session) {
-      setTodayBudget(getTodayBudget())
-      setMonthlyBudget(calculateMonthlyCumulativeBudget())
+  // ユーザー設定を読み込む
+  const loadUserSettings = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('monthly_budget')
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116はデータが見つからないエラー
+        console.error('設定読み込みエラー:', error)
+        return
+      }
+
+      if (data) {
+        setMonthlyBudgetSetting(parseFloat(data.monthly_budget) || 0)
+      } else {
+        setMonthlyBudgetSetting(0)
+      }
+    } catch (error) {
+      console.error('設定読み込みエラー:', error)
     }
-  }, [session])
+  }
+
+  // 予算設定が変更されたときに予算を再計算
+  useEffect(() => {
+    if (session && monthlyBudgetSetting >= 0) {
+      setTodayBudget(getTodayBudget(monthlyBudgetSetting))
+      setMonthlyBudget(calculateMonthlyCumulativeBudget(monthlyBudgetSetting))
+    }
+  }, [session, monthlyBudgetSetting])
 
   // 取引履歴を読み込む
   useEffect(() => {
@@ -249,8 +284,8 @@ function App() {
       const date = new Date(year, month - 1, day)
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       
-      // 予算を計算
-      const budget = calculateDailyBudget(date)
+      // 予算を計算（現在の予算設定を使用）
+      const budget = calculateDailyBudget(date, monthlyBudgetSetting)
       
       // 実績を計算（その日の取引の合計）
       const actual = transactions
@@ -338,6 +373,20 @@ function App() {
     return <Login onLogin={() => {}} />
   }
 
+  // 設定画面を表示
+  if (showSettings) {
+    return (
+      <Settings
+        onClose={() => setShowSettings(false)}
+        monthlyBudget={monthlyBudgetSetting}
+        onBudgetChange={(newBudget) => {
+          setMonthlyBudgetSetting(newBudget)
+          setShowSettings(false)
+        }}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -345,12 +394,20 @@ function App() {
           <h1 className="text-3xl font-bold text-gray-800">
             KAKEIBO
           </h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
-          >
-            ログアウト
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+            >
+              設定
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+            >
+              ログアウト
+            </button>
+          </div>
         </div>
 
         {/* 入力フォーム */}
