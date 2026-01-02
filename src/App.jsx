@@ -26,6 +26,9 @@ function App() {
   const [monthlyBudget, setMonthlyBudget] = useState(0)
   const [monthlyActual, setMonthlyActual] = useState(0)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
+  const [showOldTransactions, setShowOldTransactions] = useState(false)
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
+  const [showOlderMonths, setShowOlderMonths] = useState(false)
 
   // 認証状態の確認
   useEffect(() => {
@@ -823,47 +826,238 @@ function App() {
         </div>
 
         {/* 取引履歴 */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">取引履歴</h2>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <h2 className="text-sm font-semibold mb-3 text-gray-700">取引履歴</h2>
           {transactions.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">取引履歴がありません</p>
+            <p className="text-xs text-gray-500 text-center py-4">取引履歴がありません</p>
           ) : (
-            <div className="space-y-3">
-              {transactions.map((transaction) => (
-                <div
-                  key={transaction.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors"
+            <>
+              {/* 最近5つ */}
+              <div className="space-y-1.5 mb-3">
+                {transactions.slice(0, 5).map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-gray-800">
+                        {formatCurrency(parseFloat(transaction.amount))}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(transaction.date).toLocaleDateString('ja-JP', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          weekday: 'short',
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleEdit(transaction)}
+                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs font-medium"
+                      >
+                        編集
+                      </button>
+                      <button
+                        onClick={() => handleDelete(transaction.id)}
+                        className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 過去のデータを見るボタン */}
+              {transactions.length > 5 && (
+                <button
+                  onClick={() => {
+                    setShowOldTransactions(!showOldTransactions)
+                    if (!showOldTransactions) {
+                      // 展開時は現在の月を選択
+                      const today = new Date()
+                      setSelectedHistoryMonth(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+                    }
+                  }}
+                  className="w-full py-2 px-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium mb-3"
                 >
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800">
-                      {formatCurrency(parseFloat(transaction.amount))}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(transaction.date).toLocaleDateString('ja-JP', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        weekday: 'short',
-                      })}
-                    </p>
+                  {showOldTransactions ? '過去のデータを閉じる' : '過去のデータを見る'}
+                </button>
+              )}
+
+              {/* 過去のデータ（月選択で表示） */}
+              {showOldTransactions && transactions.length > 5 && (() => {
+                const [selectedYear, selectedMonthNum] = selectedHistoryMonth.split('-').map(Number)
+                
+                // 選択された月の取引履歴をフィルタリング（新しい順）
+                const monthTransactions = transactions
+                  .filter(t => {
+                    const tDate = new Date(t.date)
+                    return tDate.getFullYear() === selectedYear && tDate.getMonth() + 1 === selectedMonthNum
+                  })
+                  .sort((a, b) => new Date(b.date) - new Date(a.date)) // 新しい順
+
+                // 月の合計額を計算
+                const monthTotal = monthTransactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+
+                // 取引履歴からデータがある月を抽出
+                const monthsWithData = new Set()
+                transactions.forEach(t => {
+                  const tDate = new Date(t.date)
+                  const year = tDate.getFullYear()
+                  const month = tDate.getMonth() + 1
+                  monthsWithData.add(`${year}-${String(month).padStart(2, '0')}`)
+                })
+
+                // 当月と前月を計算
+                const today = new Date()
+                const currentYear = today.getFullYear()
+                const currentMonth = today.getMonth() + 1
+                const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+                
+                const prevMonthDate = new Date(currentYear, currentMonth - 2, 1)
+                const prevYear = prevMonthDate.getFullYear()
+                const prevMonth = prevMonthDate.getMonth() + 1
+                const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`
+
+                // 基本タブ（当月と前月、データがあるもののみ）
+                const baseMonths = []
+                if (monthsWithData.has(currentMonthKey)) {
+                  baseMonths.push({
+                    value: currentMonthKey,
+                    label: `${currentYear}年${currentMonth}月`,
+                  })
+                }
+                if (monthsWithData.has(prevMonthKey)) {
+                  baseMonths.push({
+                    value: prevMonthKey,
+                    label: `${prevYear}年${prevMonth}月`,
+                  })
+                }
+
+                // それより過去のデータがある月を抽出
+                const olderMonths = []
+                monthsWithData.forEach(monthKey => {
+                  if (monthKey !== currentMonthKey && monthKey !== prevMonthKey) {
+                    const [year, month] = monthKey.split('-').map(Number)
+                    olderMonths.push({
+                      value: monthKey,
+                      label: `${year}年${month}月`,
+                    })
+                  }
+                })
+                // 新しい順にソート
+                olderMonths.sort((a, b) => b.value.localeCompare(a.value))
+
+                // 過去のデータがあるかどうか
+                const hasOlderData = olderMonths.length > 0
+
+                return (
+                  <div className="border-t border-gray-200 pt-3">
+                    {/* 月選択タブ */}
+                    <div className="mb-3">
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {/* 基本タブ（当月と前月） */}
+                        {baseMonths.map((month) => (
+                          <button
+                            key={month.value}
+                            onClick={() => setSelectedHistoryMonth(month.value)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+                              selectedHistoryMonth === month.value
+                                ? 'bg-gray-800 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {month.label}
+                          </button>
+                        ))}
+                        {/* 過去のデータがある場合、展開されたら表示 */}
+                        {showOlderMonths && olderMonths.map((month) => (
+                          <button
+                            key={month.value}
+                            onClick={() => setSelectedHistoryMonth(month.value)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+                              selectedHistoryMonth === month.value
+                                ? 'bg-gray-800 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {month.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* 「さらに過去のデータを見る」ボタン */}
+                      {hasOlderData && (
+                        <button
+                          onClick={() => setShowOlderMonths(!showOlderMonths)}
+                          className="mt-2 w-full py-1.5 px-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium"
+                        >
+                          {showOlderMonths ? '過去のデータを閉じる' : 'さらに過去のデータを見る'}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 選択された月の取引履歴 */}
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                      {monthTransactions.length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-4">この月の取引履歴がありません</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {monthTransactions.map((transaction) => (
+                            <div
+                              key={transaction.id}
+                              className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-gray-800">
+                                  {formatCurrency(parseFloat(transaction.amount))}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(transaction.date).toLocaleDateString('ja-JP', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                    weekday: 'short',
+                                  })}
+                                </p>
+                              </div>
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => handleEdit(transaction)}
+                                  className="px-2 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs font-medium"
+                                >
+                                  編集
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(transaction.id)}
+                                  className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                                >
+                                  削除
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 月の合計額（固定） */}
+                    {monthTransactions.length > 0 && (
+                      <div className="sticky bottom-0 border-t-2 border-gray-300 bg-gray-100 mt-2 rounded-lg z-10">
+                        <div className="flex items-center justify-between py-2 px-2">
+                          <span className="text-xs font-semibold text-gray-700">合計</span>
+                          <span className="text-xs font-bold text-gray-800">
+                            {formatCurrency(monthTotal)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(transaction)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
-                    >
-                      編集
-                    </button>
-                    <button
-                      onClick={() => handleDelete(transaction.id)}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 transition-colors text-sm font-medium"
-                    >
-                      削除
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                )
+              })()}
+            </>
           )}
         </div>
       </div>
