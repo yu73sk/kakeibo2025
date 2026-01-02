@@ -4,7 +4,8 @@ import Login from './components/Login'
 import { 
   getTodayBudget, 
   calculateMonthlyCumulativeBudget, 
-  calculateMonthlyTotalBudget 
+  calculateMonthlyTotalBudget,
+  calculateDailyBudget
 } from './utils/budgetCalculation'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
   const [todayActual, setTodayActual] = useState(0)
   const [monthlyBudget, setMonthlyBudget] = useState(0)
   const [monthlyActual, setMonthlyActual] = useState(0)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
 
   // 認証状態の確認
   useEffect(() => {
@@ -201,6 +203,90 @@ function App() {
     return 'text-gray-600'
   }
 
+  // 日毎の予実データを生成
+  const getDailyBudgetData = (year, month) => {
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const dailyData = []
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month - 1, day)
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      
+      // 予算を計算
+      const budget = calculateDailyBudget(date)
+      
+      // 実績を計算（その日の取引の合計）
+      const actual = transactions
+        .filter(t => t.date === dateStr)
+        .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+      
+      // 差分
+      const difference = actual - budget
+
+      dailyData.push({
+        date: dateStr,
+        day,
+        weekday: date.getDay(),
+        weekdayName: ['日', '月', '火', '水', '木', '金', '土'][date.getDay()],
+        budget,
+        actual,
+        difference,
+      })
+    }
+
+    return dailyData
+  }
+
+  // 選択された月のデータを取得
+  const selectedYear = parseInt(selectedMonth.split('-')[0])
+  const selectedMonthNum = parseInt(selectedMonth.split('-')[1])
+  const dailyData = getDailyBudgetData(selectedYear, selectedMonthNum)
+
+  // 合計値を計算
+  const totalBudget = dailyData.reduce((sum, day) => sum + day.budget, 0)
+  const totalActual = dailyData.reduce((sum, day) => sum + day.actual, 0)
+  const totalDifference = totalActual - totalBudget
+
+  // 表示可能な月のリストを生成（過去6ヶ月から未来3ヶ月まで）
+  const getAvailableMonths = () => {
+    const months = []
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() + 1
+
+    // 過去6ヶ月
+    for (let i = 6; i >= 1; i--) {
+      const date = new Date(currentYear, currentMonth - i - 1, 1)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      months.push({
+        value: `${year}-${String(month).padStart(2, '0')}`,
+        label: `${year}年${month}月`,
+      })
+    }
+
+    // 今月
+    months.push({
+      value: `${currentYear}-${String(currentMonth).padStart(2, '0')}`,
+      label: `${currentYear}年${currentMonth}月`,
+    })
+
+    // 未来3ヶ月
+    for (let i = 1; i <= 3; i++) {
+      const date = new Date(currentYear, currentMonth + i - 1, 1)
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      months.push({
+        value: `${year}-${String(month).padStart(2, '0')}`,
+        label: `${year}年${month}月`,
+      })
+    }
+
+    return months
+  }
+
+  const availableMonths = getAvailableMonths()
+
   // ローディング中
   if (loading) {
     return (
@@ -328,6 +414,77 @@ function App() {
             <p className={`text-xl font-bold ${getDifferenceColor(getDifference(monthlyBudget, monthlyActual))}`}>
               {formatCurrency(getDifference(monthlyBudget, monthlyActual))}
             </p>
+          </div>
+        </div>
+
+        {/* 日毎の予実一覧 */}
+        <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
+          <div className="mb-3">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {availableMonths.map((month) => (
+                <button
+                  key={month.value}
+                  onClick={() => setSelectedMonth(month.value)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+                    selectedMonth === month.value
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {month.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-2 font-semibold text-gray-700 bg-white">日</th>
+                  <th className="text-left py-2 px-2 font-semibold text-gray-700 bg-white">曜</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">予算</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">実績</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">差分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyData.map((day) => (
+                  <tr
+                    key={day.date}
+                    className={`border-b border-gray-100 hover:bg-gray-50 ${
+                      day.weekday === 0 ? 'bg-red-50' : day.weekday === 6 ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <td className="py-1.5 px-2 text-gray-800">{day.day}</td>
+                    <td className="py-1.5 px-2 text-gray-600">{day.weekdayName}</td>
+                    <td className="py-1.5 px-2 text-right text-gray-800">
+                      {formatCurrency(day.budget).replace('¥', '¥')}
+                    </td>
+                    <td className="py-1.5 px-2 text-right text-gray-800">
+                      {day.actual > 0 ? formatCurrency(day.actual).replace('¥', '¥') : '-'}
+                    </td>
+                    <td className={`py-1.5 px-2 text-right font-medium ${getDifferenceColor(day.difference)}`}>
+                      {day.actual > 0 || day.difference !== -day.budget
+                        ? formatCurrency(day.difference).replace('¥', day.difference >= 0 ? '+¥' : '¥')
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+                {/* 合計行 */}
+                <tr className="sticky bottom-0 border-t-2 border-gray-300 bg-gray-100 font-semibold z-10">
+                  <td className="py-2 px-2 text-gray-800 bg-gray-100" colSpan="2">合計</td>
+                  <td className="py-2 px-2 text-right text-gray-800 bg-gray-100">
+                    {formatCurrency(totalBudget).replace('¥', '¥')}
+                  </td>
+                  <td className="py-2 px-2 text-right text-gray-800 bg-gray-100">
+                    {formatCurrency(totalActual).replace('¥', '¥')}
+                  </td>
+                  <td className={`py-2 px-2 text-right bg-gray-100 ${getDifferenceColor(totalDifference)}`}>
+                    {formatCurrency(totalDifference).replace('¥', totalDifference >= 0 ? '+¥' : '¥')}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
