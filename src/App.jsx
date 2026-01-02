@@ -114,24 +114,60 @@ function App() {
       return
     }
 
+    if (!session || !session.user) {
+      alert('ログインが必要です。ページをリロードしてください。')
+      return
+    }
+
     setSaving(true)
     try {
       if (editingId) {
         // 編集
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('transactions')
           .update({ date, amount: parseFloat(amount) })
           .eq('id', editingId)
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error('更新エラー詳細:', error)
+          throw new Error(`更新に失敗しました: ${error.message || JSON.stringify(error)}`)
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error('更新されたデータが見つかりませんでした。権限を確認してください。')
+        }
+        
         setEditingId(null)
       } else {
         // 新規作成
-        const { error } = await supabase
+        const insertData = {
+          date,
+          amount: parseFloat(amount),
+          user_id: session.user.id
+        }
+        
+        console.log('保存データ:', insertData)
+        console.log('セッション:', session.user.id)
+        
+        const { data, error } = await supabase
           .from('transactions')
-          .insert([{ date, amount: parseFloat(amount), user_id: session.user.id }])
+          .insert([insertData])
+          .select()
 
-        if (error) throw error
+        if (error) {
+          console.error('挿入エラー詳細:', error)
+          console.error('エラーコード:', error.code)
+          console.error('エラーメッセージ:', error.message)
+          console.error('エラー詳細:', error.details)
+          throw new Error(`保存に失敗しました: ${error.message || JSON.stringify(error)}`)
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error('データが保存されませんでした。権限を確認してください。')
+        }
+        
+        console.log('保存成功:', data)
       }
 
       setAmount('')
@@ -139,7 +175,8 @@ function App() {
       await loadTransactions()
     } catch (error) {
       console.error('保存エラー:', error)
-      alert('保存に失敗しました')
+      const errorMessage = error.message || '保存に失敗しました。ブラウザのコンソールを確認してください。'
+      alert(errorMessage)
     } finally {
       setSaving(false)
     }
