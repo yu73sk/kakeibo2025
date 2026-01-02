@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
 import Settings from './components/Settings'
+import Cashflow from './components/Cashflow'
 import { 
   getTodayBudget, 
   calculateMonthlyCumulativeBudget, 
@@ -13,6 +14,7 @@ function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCashflow, setShowCashflow] = useState(false)
   const [monthlyBudgetSetting, setMonthlyBudgetSetting] = useState(0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [amount, setAmount] = useState('')
@@ -387,6 +389,15 @@ function App() {
     )
   }
 
+  // キャッシュフロー画面を表示
+  if (showCashflow) {
+    return (
+      <Cashflow
+        onClose={() => setShowCashflow(false)}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -395,6 +406,12 @@ function App() {
             KAKEIBO
           </h1>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowCashflow(true)}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+            >
+              キャッシュフロー
+            </button>
             <button
               onClick={() => setShowSettings(true)}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
