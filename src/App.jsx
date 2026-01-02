@@ -221,11 +221,23 @@ function App() {
 
   const handleLogout = async () => {
     try {
+      // セッションを明示的にクリア
       const { error } = await supabase.auth.signOut()
       if (error) throw error
+      
+      // 状態をリセット
+      setSession(null)
+      setTransactions([])
+      setMonthlyBudgetSetting(0)
+      
+      // ページをリロードして確実にセッションをクリア
+      window.location.reload()
     } catch (error) {
       console.error('ログアウトエラー:', error)
-      alert('ログアウトに失敗しました')
+      alert(`ログアウトに失敗しました: ${error.message || '不明なエラー'}`)
+      
+      // エラーが発生しても強制的にリロード
+      window.location.reload()
     }
   }
 

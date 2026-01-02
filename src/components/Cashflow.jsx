@@ -123,31 +123,15 @@ function Cashflow({ onClose }) {
         // 引き継いだデータを保存
         await saveItems(newExpenses, newIncomes, year, month)
       } else {
-        // 前月のデータもない場合、プリセット項目を表示
-        setExpenseItems(PRESET_EXPENSE_CATEGORIES.map(name => ({
-          name,
-          amount: 0,
-          isFixed: false,
-        })))
-        setIncomeItems(PRESET_INCOME_CATEGORIES.map(name => ({
-          name,
-          amount: 0,
-          isFixed: false,
-        })))
+        // 前月のデータもない場合、空の配列を設定（初期値は項目なし）
+        setExpenseItems([])
+        setIncomeItems([])
       }
     } catch (error) {
       console.error('前月データ読み込みエラー:', error)
-      // エラーの場合、プリセット項目を表示
-      setExpenseItems(PRESET_EXPENSE_CATEGORIES.map(name => ({
-        name,
-        amount: 0,
-        isFixed: false,
-      })))
-      setIncomeItems(PRESET_INCOME_CATEGORIES.map(name => ({
-        name,
-        amount: 0,
-        isFixed: false,
-      })))
+      // エラーの場合、空の配列を設定（初期値は項目なし）
+      setExpenseItems([])
+      setIncomeItems([])
     }
   }
 
