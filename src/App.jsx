@@ -470,6 +470,21 @@ function App() {
 
   const availableMonths = getAvailableMonths()
 
+  // ユーザー名を取得（メールアドレスの@以前の部分）
+  const getUserName = () => {
+    if (!session || !session.user || !session.user.email) {
+      return 'ゲスト'
+    }
+    const email = session.user.email
+    const atIndex = email.indexOf('@')
+    if (atIndex === -1) {
+      return 'ゲスト'
+    }
+    return email.substring(0, atIndex)
+  }
+
+  const userName = getUserName()
+
   // ローディング中
   if (loading) {
     return (
@@ -511,9 +526,14 @@ function App() {
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">
-            KAKEIBO
-          </h1>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">
+              KAKEIBO
+            </h1>
+            <p className="text-xs text-gray-500 mt-2">
+              ユーザー：{userName}
+            </p>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowCashflow(true)}
