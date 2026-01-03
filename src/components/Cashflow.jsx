@@ -298,42 +298,40 @@ function Cashflow({ onClose }) {
               <h3 className="text-lg font-semibold text-gray-700">支出合計</h3>
               <span className="text-xl font-bold text-red-600">{formatCurrency(totalExpense)}</span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {expenseItems.map((item, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                  <div className="flex-1 flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => updateItem('expense', index, 'name', e.target.value)}
-                      placeholder="項目名"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm"
-                    />
-                    <button
-                      onClick={() => updateItem('expense', index, 'isFixed', !item.isFixed)}
-                      className={`px-2 py-1 text-xs rounded ${
-                        item.isFixed
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                      title="固定費"
-                    >
-                      📌
-                    </button>
-                  </div>
+                <div key={index} className="flex items-center gap-1.5 py-1.5 px-2 bg-gray-50 rounded-lg">
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => updateItem('expense', index, 'name', e.target.value)}
+                    placeholder="項目名"
+                    className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-xs"
+                  />
+                  <button
+                    onClick={() => updateItem('expense', index, 'isFixed', !item.isFixed)}
+                    className={`px-1.5 py-0.5 text-xs rounded border ${
+                      item.isFixed
+                        ? 'bg-blue-100 text-blue-700 border-blue-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
+                    }`}
+                    title="固定費"
+                  >
+                    固定費
+                  </button>
                   <input
                     type="number"
                     inputMode="decimal"
                     value={item.amount || ''}
                     onChange={(e) => updateItem('expense', index, 'amount', parseFloat(e.target.value) || 0)}
                     placeholder="0"
-                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm text-right"
+                    className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-xs text-right"
                     min="0"
                     step="1"
                   />
                   <button
                     onClick={() => removeItem('expense', index)}
-                    className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
                   >
                     -
                   </button>
@@ -354,42 +352,40 @@ function Cashflow({ onClose }) {
               <h3 className="text-lg font-semibold text-gray-700">収入合計</h3>
               <span className="text-xl font-bold text-green-600">{formatCurrency(totalIncome)}</span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {incomeItems.map((item, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
-                  <div className="flex-1 flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => updateItem('income', index, 'name', e.target.value)}
-                      placeholder="項目名"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm"
-                    />
-                    <button
-                      onClick={() => updateItem('income', index, 'isFixed', !item.isFixed)}
-                      className={`px-2 py-1 text-xs rounded ${
-                        item.isFixed
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                      title="固定費"
-                    >
-                      📌
-                    </button>
-                  </div>
+                <div key={index} className="flex items-center gap-1.5 py-1.5 px-2 bg-gray-50 rounded-lg">
+                  <input
+                    type="text"
+                    value={item.name}
+                    onChange={(e) => updateItem('income', index, 'name', e.target.value)}
+                    placeholder="項目名"
+                    className="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-xs"
+                  />
+                  <button
+                    onClick={() => updateItem('income', index, 'isFixed', !item.isFixed)}
+                    className={`px-1.5 py-0.5 text-xs rounded border ${
+                      item.isFixed
+                        ? 'bg-blue-100 text-blue-700 border-blue-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
+                    }`}
+                    title="固定費"
+                  >
+                    固定費
+                  </button>
                   <input
                     type="number"
                     inputMode="decimal"
                     value={item.amount || ''}
                     onChange={(e) => updateItem('income', index, 'amount', parseFloat(e.target.value) || 0)}
                     placeholder="0"
-                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm text-right"
+                    className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-xs text-right"
                     min="0"
                     step="1"
                   />
                   <button
                     onClick={() => removeItem('income', index)}
-                    className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                    className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
                   >
                     -
                   </button>
