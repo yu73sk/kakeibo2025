@@ -37,6 +37,23 @@ function Cashflow({ onClose }) {
     return months
   }
 
+  // 項目をソート（固定費を上に）
+  const sortItems = (items) => {
+    return [...items].sort((a, b) => {
+      // 固定費を上に
+      if (a.isFixed && !b.isFixed) return -1
+      if (!a.isFixed && b.isFixed) return 1
+      // 固定費同士は金額の高い順
+      if (a.isFixed && b.isFixed) {
+        const amountA = parseFloat(a.amount) || 0
+        const amountB = parseFloat(b.amount) || 0
+        return amountB - amountA
+      }
+      // 非固定費同士は項目名順
+      return (a.name || '').localeCompare(b.name || '', 'ja')
+    })
+  }
+
   // データを読み込む
   const loadCashflow = useCallback(async (year, month) => {
     try {
@@ -61,18 +78,21 @@ function Cashflow({ onClose }) {
       if (expenses.length === 0 && incomes.length === 0) {
         await loadPreviousMonthData(year, month)
       } else {
-        setExpenseItems(expenses.map(item => ({
+        const expenseItemsData = expenses.map(item => ({
           id: item.id,
           name: item.category_name,
           amount: parseFloat(item.amount) || 0,
           isFixed: item.is_fixed || false,
-        })))
-        setIncomeItems(incomes.map(item => ({
+        }))
+        const incomeItemsData = incomes.map(item => ({
           id: item.id,
           name: item.category_name,
           amount: parseFloat(item.amount) || 0,
           isFixed: item.is_fixed || false,
-        })))
+        }))
+        // 固定費を上にソート
+        setExpenseItems(sortItems(expenseItemsData))
+        setIncomeItems(sortItems(incomeItemsData))
       }
     } catch (error) {
       console.error('キャッシュフロー読み込みエラー:', error)
@@ -117,8 +137,9 @@ function Cashflow({ onClose }) {
           isFixed: item.is_fixed || false,
         }))
 
-        setExpenseItems(newExpenses)
-        setIncomeItems(newIncomes)
+        // 固定費を上にソート
+        setExpenseItems(sortItems(newExpenses))
+        setIncomeItems(sortItems(newIncomes))
 
         // 引き継いだデータを保存
         await saveItems(newExpenses, newIncomes, year, month)
@@ -227,11 +248,15 @@ function Cashflow({ onClose }) {
     if (type === 'expense') {
       const updated = [...expenseItems]
       updated[index] = { ...updated[index], [field]: value }
-      setExpenseItems(updated)
+      // 固定費フラグが変更された場合、ソートを実行
+      const sorted = field === 'isFixed' ? sortItems(updated) : updated
+      setExpenseItems(sorted)
     } else {
       const updated = [...incomeItems]
       updated[index] = { ...updated[index], [field]: value }
-      setIncomeItems(updated)
+      // 固定費フラグが変更された場合、ソートを実行
+      const sorted = field === 'isFixed' ? sortItems(updated) : updated
+      setIncomeItems(sorted)
     }
   }
 
