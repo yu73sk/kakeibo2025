@@ -662,6 +662,7 @@ function App() {
 
         {/* 日毎の予実一覧 */}
         <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">日ごとの予実一覧表</h2>
           <div className="mb-3">
             <div className="flex gap-2 overflow-x-auto pb-2">
               {availableMonths.map((month) => (
