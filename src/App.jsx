@@ -731,14 +731,14 @@ function App() {
           </div>
         </div>
 
-        {/* 週次予実進捗 */}
+        {/* 期間進捗 */}
         <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">週次予実進捗</h2>
+          <h2 className="text-lg font-semibold mb-4 text-gray-700">期間進捗</h2>
           
-          {/* 当月 */}
+          {/* 今日までの期間進捗 */}
           <div className="mb-4">
             <div className="bg-gray-800 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
-              当月
+              今日までの期間進捗
             </div>
             <div className="border border-gray-200 rounded-b-xl overflow-hidden">
               <table className="w-full text-sm">
@@ -776,10 +776,10 @@ function App() {
             </div>
           </div>
 
-          {/* 週次 */}
+          {/* 週次期間進捗 */}
           <div>
             <div className="bg-gray-600 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
-              週次
+              週次期間進捗
             </div>
             <div className="border border-gray-200 rounded-b-xl overflow-hidden">
               <table className="w-full text-sm">
