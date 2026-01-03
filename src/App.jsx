@@ -618,45 +618,48 @@ function App() {
           </form>
         </div>
 
-        {/* 今日の予実 */}
-        <div className="bg-white rounded-2xl p-6 mb-4 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">今日の予実</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">予算</p>
-              <p className="text-2xl font-bold text-gray-800">{formatCurrency(todayBudget)}</p>
+        {/* 今日の予実と今月の予実（横並び） */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {/* 今日の予実 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-sm font-semibold mb-3 text-gray-700">今日の予実</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">予算</p>
+                <p className="text-lg font-bold text-gray-800">{formatCurrency(todayBudget)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">実績</p>
+                <p className="text-lg font-bold text-gray-800">{formatCurrency(todayActual)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 mb-1">実績</p>
-              <p className="text-2xl font-bold text-gray-800">{formatCurrency(todayActual)}</p>
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-1">差額</p>
+              <p className={`text-base font-bold ${getDifferenceColor(getDifference(todayBudget, todayActual))}`}>
+                {formatCurrency(getDifference(todayBudget, todayActual))}
+              </p>
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-1">差額</p>
-            <p className={`text-xl font-bold ${getDifferenceColor(getDifference(todayBudget, todayActual))}`}>
-              {formatCurrency(getDifference(todayBudget, todayActual))}
-            </p>
-          </div>
-        </div>
 
-        {/* 今月の予実 */}
-        <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">今月の予実（今日まで）</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">累積予算</p>
-              <p className="text-2xl font-bold text-gray-800">{formatCurrency(monthlyBudget)}</p>
+          {/* 今月の予実 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm">
+            <h2 className="text-sm font-semibold mb-3 text-gray-700">今月の予実（今日まで）</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">累積予算</p>
+                <p className="text-lg font-bold text-gray-800">{formatCurrency(monthlyBudget)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">累積実績</p>
+                <p className="text-lg font-bold text-gray-800">{formatCurrency(monthlyActual)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 mb-1">累積実績</p>
-              <p className="text-2xl font-bold text-gray-800">{formatCurrency(monthlyActual)}</p>
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-1">差額</p>
+              <p className={`text-base font-bold ${getDifferenceColor(getDifference(monthlyBudget, monthlyActual))}`}>
+                {formatCurrency(getDifference(monthlyBudget, monthlyActual))}
+              </p>
             </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-1">差額</p>
-            <p className={`text-xl font-bold ${getDifferenceColor(getDifference(monthlyBudget, monthlyActual))}`}>
-              {formatCurrency(getDifference(monthlyBudget, monthlyActual))}
-            </p>
           </div>
         </div>
 
