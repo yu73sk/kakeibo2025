@@ -559,6 +559,26 @@ function App() {
           </div>
         </div>
 
+        {/* 予算設定を促すメッセージ */}
+        {monthlyBudgetSetting <= 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 shadow-sm">
+            <div className="flex items-start gap-2">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium text-blue-800 leading-relaxed">
+                  予算を設定すると、日々の支出を管理しやすくなります。
+                  <br />
+                  右上の設定ボタンから予算を設定しましょう。
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 入力フォーム */}
         <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
           <h2 className="text-lg font-semibold mb-4 text-gray-700">
