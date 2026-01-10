@@ -3,12 +3,21 @@ import { supabase } from './lib/supabase'
 import Login from './components/Login'
 import Settings from './components/Settings'
 import Cashflow from './components/Cashflow'
+import { Toaster, toast } from 'react-hot-toast'
 import { 
   getTodayBudget, 
   calculateMonthlyCumulativeBudget, 
   calculateMonthlyTotalBudget,
   calculateDailyBudget
 } from './utils/budgetCalculation'
+import {
+  generateSampleDailyData,
+  generateSampleTransactions,
+  getSampleTodayData,
+  getSampleMonthlyData,
+  getSampleWeeklyData,
+  getSampleMonthlyBudget
+} from './utils/sampleData'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -29,6 +38,14 @@ function App() {
   const [showOldTransactions, setShowOldTransactions] = useState(false)
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
   const [showOlderMonths, setShowOlderMonths] = useState(false)
+  const [isDemoMode, setIsDemoMode] = useState(false)
+
+  // クエリパラメータをチェック
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const demo = params.get('demo') === 'true'
+    setIsDemoMode(demo)
+  }, [])
 
   // 認証状態の確認
   useEffect(() => {
@@ -175,8 +192,23 @@ function App() {
     setMonthlyActual(monthlyTotal)
   }
 
+  // サンプルページでの編集操作を制限
+  const handleDemoRestriction = () => {
+    toast.error('ログインをして自分のページを作りましょう', {
+      duration: 3000,
+      position: 'top-center',
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // サンプルページでは編集を制限
+    if (!session && isDemoMode) {
+      handleDemoRestriction()
+      return
+    }
+    
     if (!amount || parseFloat(amount) <= 0) {
       alert('金額を入力してください')
       return
@@ -273,6 +305,12 @@ function App() {
   }
 
   const handleEdit = (transaction) => {
+    // サンプルページでは編集を制限
+    if (!session && isDemoMode) {
+      handleDemoRestriction()
+      return
+    }
+    
     setEditingId(transaction.id)
     setDate(transaction.date)
     setAmount(transaction.amount.toString())
@@ -280,6 +318,12 @@ function App() {
   }
 
   const handleDelete = async (id) => {
+    // サンプルページでは編集を制限
+    if (!session && isDemoMode) {
+      handleDemoRestriction()
+      return
+    }
+    
     if (!confirm('この取引を削除しますか？')) return
 
     try {
@@ -297,6 +341,12 @@ function App() {
   }
 
   const handleCancel = () => {
+    // サンプルページでは編集を制限
+    if (!session && isDemoMode) {
+      handleDemoRestriction()
+      return
+    }
+    
     setEditingId(null)
     setAmount('')
     setDate(new Date().toISOString().split('T')[0])
@@ -308,6 +358,363 @@ function App() {
       currency: 'JPY',
       minimumFractionDigits: 0,
     }).format(value)
+  }
+
+  // サンプルページをレンダリング
+  const renderSamplePage = () => {
+    const sampleTodayData = getSampleTodayData()
+    const sampleMonthlyData = getSampleMonthlyData()
+    const sampleDailyData = generateSampleDailyData()
+    const sampleTransactions = generateSampleTransactions()
+    const sampleWeeklyData = getSampleWeeklyData()
+
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <Toaster />
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">
+                KAKEIBO
+              </h1>
+              <p className="text-xs text-gray-500 mt-2">
+                ユーザー：ゲスト
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDemoRestriction}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+              >
+                キャッシュフロー
+              </button>
+              <button
+                onClick={handleDemoRestriction}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+              >
+                設定
+              </button>
+              <button
+                onClick={() => {
+                  window.location.href = '/'
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors text-sm font-medium"
+              >
+                ログイン
+              </button>
+            </div>
+          </div>
+
+          {/* サンプルページの案内文 */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 shadow-sm">
+            <div className="flex items-start gap-2">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium text-blue-800 leading-relaxed">
+                  これはサンプルページのため、架空の数字が表示されています。
+                  <br />
+                  ログインするとあなた専用のページで家計管理を始められます。
+                  <br />
+                  画面右上のログインボタンからログインしてみましょう。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 入力フォーム（編集制限付き） */}
+          <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+            <h2 className="text-lg font-semibold mb-4 text-gray-700">
+              新しい取引を追加
+            </h2>
+            <form onSubmit={(e) => {
+              e.preventDefault()
+              handleDemoRestriction()
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-2">
+                    日付
+                  </label>
+                  <input
+                    type="date"
+                    id="date"
+                    value={new Date().toISOString().split('T')[0]}
+                    disabled
+                    className="w-full px-4 py-3 text-lg border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent bg-gray-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-2">
+                    金額
+                  </label>
+                  <input
+                    type="number"
+                    id="amount"
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="w-full px-4 py-3 text-lg border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-gray-800 text-white py-3 px-6 rounded-2xl font-semibold hover:bg-gray-700 transition-colors"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* 今日の予実と今月の予実（横並び） */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {/* 今日の予実 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold mb-3 text-gray-700">今日の予実</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">予算</p>
+                  <p className="text-lg font-bold text-gray-800">{formatCurrency(sampleTodayData.budget)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">実績</p>
+                  <p className="text-lg font-bold text-gray-800">{formatCurrency(sampleTodayData.actual)}</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">差額</p>
+                <p className={`text-base font-bold ${sampleTodayData.actual - sampleTodayData.budget < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(sampleTodayData.actual - sampleTodayData.budget)}
+                </p>
+              </div>
+            </div>
+
+            {/* 今月の予実 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="text-sm font-semibold mb-3 text-gray-700">今月の予実（今日まで）</h2>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">累積予算</p>
+                  <p className="text-lg font-bold text-gray-800">{formatCurrency(sampleMonthlyData.budget)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">累積実績</p>
+                  <p className="text-lg font-bold text-gray-800">{formatCurrency(sampleMonthlyData.actual)}</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">差額</p>
+                <p className={`text-base font-bold ${sampleMonthlyData.actual - sampleMonthlyData.budget < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(sampleMonthlyData.actual - sampleMonthlyData.budget)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 日毎の予実一覧表 */}
+          <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
+            <h2 className="text-lg font-semibold mb-4 text-gray-700">日ごとの予実一覧表</h2>
+            <div className="mb-3">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {availableMonths.map((month) => (
+                  <button
+                    key={month.value}
+                    disabled
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors bg-gray-100 text-gray-400 cursor-not-allowed"
+                  >
+                    {month.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-white z-10">
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700 bg-white">日</th>
+                    <th className="text-left py-2 px-2 font-semibold text-gray-700 bg-white">曜</th>
+                    <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">予算</th>
+                    <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">実績</th>
+                    <th className="text-right py-2 px-2 font-semibold text-gray-700 bg-white">差分</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sampleDailyData.map((day) => (
+                    <tr key={day.date} className="border-b border-gray-100">
+                      <td className="py-2 px-2 text-gray-800">{day.day}</td>
+                      <td className={`py-2 px-2 ${
+                        day.weekday === 0 ? 'text-red-600' : day.weekday === 6 ? 'text-blue-600' : 'text-gray-800'
+                      }`}>
+                        {day.weekdayName}
+                      </td>
+                      <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(day.budget)}</td>
+                      <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(day.actual)}</td>
+                      <td className={`py-2 px-2 text-right font-medium ${
+                        day.difference < 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatCurrency(day.difference)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* 合計行 */}
+            <div className="sticky bottom-0 border-t-2 border-gray-300 bg-gray-100 mt-2 rounded-lg">
+              <div className="flex items-center justify-between py-2 px-2">
+                <span className="text-xs font-semibold text-gray-700">合計</span>
+                <div className="flex gap-4">
+                  <span className="text-xs font-semibold text-gray-700">
+                    {formatCurrency(sampleDailyData.reduce((sum, day) => sum + day.budget, 0))}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-700">
+                    {formatCurrency(sampleDailyData.reduce((sum, day) => sum + day.actual, 0))}
+                  </span>
+                  <span className={`text-xs font-semibold ${
+                    sampleDailyData.reduce((sum, day) => sum + day.difference, 0) < 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {formatCurrency(sampleDailyData.reduce((sum, day) => sum + day.difference, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 期間進捗 */}
+          <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+            <h2 className="text-lg font-semibold mb-4 text-gray-700">期間進捗</h2>
+            
+            {/* 今日までの期間進捗 */}
+            <div className="mb-4">
+              <div className="bg-gray-800 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
+                今日までの期間進捗
+              </div>
+              <div className="border border-gray-200 rounded-b-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left py-2 px-4 font-semibold text-gray-700">期間</th>
+                      <th className="text-left py-2 px-4 font-semibold text-gray-700">状況</th>
+                      <th className="text-right py-2 px-4 font-semibold text-gray-700">期間使用率</th>
+                      <th className="text-right py-2 px-4 font-semibold text-gray-700">残金</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t border-gray-200">
+                      <td className="py-2 px-4 text-gray-800">今月</td>
+                      <td className="py-2 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          sampleMonthlyData.actual > sampleMonthlyData.budget
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {sampleMonthlyData.actual > sampleMonthlyData.budget ? 'ビハインド' : '予算内'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 text-right text-gray-800">
+                        {sampleMonthlyData.budget > 0 ? ((sampleMonthlyData.actual / sampleMonthlyData.budget) * 100).toFixed(0) : 0}%
+                      </td>
+                      <td className={`py-2 px-4 text-right font-medium ${
+                        sampleMonthlyData.budget - sampleMonthlyData.actual < 0 ? 'text-red-600' : 'text-gray-800'
+                      }`}>
+                        {formatCurrency(sampleMonthlyData.budget - sampleMonthlyData.actual)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 週次期間進捗 */}
+            <div>
+              <div className="bg-gray-600 text-white px-4 py-2 rounded-t-xl font-semibold text-sm">
+                週次期間進捗
+              </div>
+              <div className="border border-gray-200 rounded-b-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left py-2 px-4 font-semibold text-gray-700">期間</th>
+                      <th className="text-left py-2 px-4 font-semibold text-gray-700">状況</th>
+                      <th className="text-right py-2 px-4 font-semibold text-gray-700">期間使用率</th>
+                      <th className="text-right py-2 px-4 font-semibold text-gray-700">残金</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleWeeklyData.map((week, index) => (
+                      <tr key={index} className="border-t border-gray-200">
+                        <td className="py-2 px-4 text-gray-800">{week.period}</td>
+                        <td className="py-2 px-4">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            week.isBehind
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {week.status}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4 text-right text-gray-800">{week.usageRate}%</td>
+                        <td className={`py-2 px-4 text-right font-medium ${
+                          week.remaining < 0 ? 'text-red-600' : 'text-gray-800'
+                        }`}>
+                          {formatCurrency(week.remaining)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* 取引履歴 */}
+          <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+            <h2 className="text-lg font-semibold mb-4 text-gray-700">取引履歴</h2>
+            <div className="space-y-1.5">
+              {sampleTransactions.slice(0, 5).map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-800">
+                      {formatCurrency(parseFloat(transaction.amount))}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(transaction.date).toLocaleDateString('ja-JP', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        weekday: 'short',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={handleDemoRestriction}
+                      className="px-2 py-1 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-xs font-medium"
+                    >
+                      編集
+                    </button>
+                    <button
+                      onClick={handleDemoRestriction}
+                      className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs font-medium"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const getDifference = (budget, actual) => {
@@ -497,9 +904,26 @@ function App() {
     )
   }
 
-  // ログインしていない場合はログイン画面を表示
-  if (!session) {
-    return <Login onLogin={() => {}} />
+  // セッションがある場合は常にメインページ（実データ）を表示
+  if (session) {
+    // クエリパラメータを削除
+    if (isDemoMode) {
+      window.history.replaceState({}, '', window.location.pathname)
+      setIsDemoMode(false)
+    }
+  } else {
+    // セッションがない場合
+    if (isDemoMode) {
+      // サンプルページを表示（後で実装）
+    } else {
+      // ログイン画面を表示
+      return <Login onLogin={() => {}} />
+    }
+  }
+
+  // サンプルページモードの場合の処理
+  if (!session && isDemoMode) {
+    return renderSamplePage()
   }
 
   // 設定画面を表示
@@ -527,6 +951,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <Toaster />
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>

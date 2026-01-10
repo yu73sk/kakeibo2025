@@ -117,6 +117,15 @@ function Login({ onLogin }) {
               >
                 {isSignUp ? '既にアカウントをお持ちの方はログイン' : 'アカウントをお持ちでない方は新規登録'}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/?demo=true'
+                }}
+                className="w-full bg-blue-500 text-white py-3 px-6 rounded-2xl font-semibold hover:bg-blue-600 transition-colors mt-2"
+              >
+                サンプルページはこちら
+              </button>
             </div>
           </form>
         </div>
