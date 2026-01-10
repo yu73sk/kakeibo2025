@@ -122,7 +122,7 @@ function Login({ onLogin }) {
                 onClick={() => {
                   window.location.href = '/?demo=true'
                 }}
-                className="w-full bg-blue-500 text-white py-3 px-6 rounded-2xl font-semibold hover:bg-blue-600 transition-colors mt-2"
+                className="w-full bg-blue-500 text-white py-2 px-4 rounded-xl text-sm font-medium hover:bg-blue-600 transition-colors mt-2"
               >
                 サンプルページはこちら
               </button>
