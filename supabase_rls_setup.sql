@@ -101,3 +101,38 @@ CREATE POLICY "Users can delete own cashflow" ON cashflow
   FOR DELETE
   USING (auth.uid() = user_id);
 
+-- ============================================
+-- savingsテーブルのRLS設定
+-- ============================================
+
+-- RLSを有効化
+ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
+
+-- 既存のポリシーを削除（存在する場合）
+DROP POLICY IF EXISTS "Users can view own savings" ON savings;
+DROP POLICY IF EXISTS "Users can insert own savings" ON savings;
+DROP POLICY IF EXISTS "Users can update own savings" ON savings;
+DROP POLICY IF EXISTS "Users can delete own savings" ON savings;
+DROP POLICY IF EXISTS "Allow all operations for all users" ON savings;
+
+-- 自分の貯金のみ読み取り可能なポリシー
+CREATE POLICY "Users can view own savings" ON savings
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- 自分の貯金のみ挿入可能なポリシー
+CREATE POLICY "Users can insert own savings" ON savings
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- 自分の貯金のみ更新可能なポリシー
+CREATE POLICY "Users can update own savings" ON savings
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- 自分の貯金のみ削除可能なポリシー
+CREATE POLICY "Users can delete own savings" ON savings
+  FOR DELETE
+  USING (auth.uid() = user_id);
+

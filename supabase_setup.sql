@@ -118,3 +118,43 @@ CREATE POLICY "Users can delete own cashflow" ON cashflow
   FOR DELETE
   USING (auth.uid() = user_id);
 
+-- savingsテーブルを作成
+CREATE TABLE IF NOT EXISTS savings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, year, month)
+);
+
+-- インデックスを追加
+CREATE INDEX IF NOT EXISTS idx_savings_user_id ON savings(user_id);
+CREATE INDEX IF NOT EXISTS idx_savings_year_month ON savings(year, month);
+
+-- Row Level Security (RLS) を有効化
+ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
+
+-- 自分の貯金のみ読み取り可能なポリシー
+CREATE POLICY "Users can view own savings" ON savings
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- 自分の貯金のみ挿入可能なポリシー
+CREATE POLICY "Users can insert own savings" ON savings
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- 自分の貯金のみ更新可能なポリシー
+CREATE POLICY "Users can update own savings" ON savings
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- 自分の貯金のみ削除可能なポリシー
+CREATE POLICY "Users can delete own savings" ON savings
+  FOR DELETE
+  USING (auth.uid() = user_id);
+

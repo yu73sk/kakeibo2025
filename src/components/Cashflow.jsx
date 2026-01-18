@@ -10,6 +10,7 @@ function Cashflow({ onClose }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
   const [expenseItems, setExpenseItems] = useState([])
   const [incomeItems, setIncomeItems] = useState([])
+  const [savingsAmount, setSavingsAmount] = useState(0)
   const [loading, setLoading] = useState(false)
 
   // 利用可能な年月のリストを生成
@@ -73,6 +74,23 @@ function Cashflow({ onClose }) {
 
       const expenses = (data || []).filter(item => item.type === 'expense')
       const incomes = (data || []).filter(item => item.type === 'income')
+
+      // 貯金データを読み込む
+      const { data: savingsData, error: savingsError } = await supabase
+        .from('savings')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('year', year)
+        .eq('month', month)
+        .single()
+
+      if (savingsError && savingsError.code !== 'PGRST116') {
+        console.error('貯金読み込みエラー:', savingsError)
+      } else if (savingsData) {
+        setSavingsAmount(parseFloat(savingsData.amount) || 0)
+      } else {
+        setSavingsAmount(0)
+      }
 
       // データがない場合、前月から引き継ぐ
       if (expenses.length === 0 && incomes.length === 0) {
@@ -157,7 +175,7 @@ function Cashflow({ onClose }) {
   }
 
   // 項目を保存
-  const saveItems = async (expenses, incomes, year, month) => {
+  const saveItems = useCallback(async (expenses, incomes, year, month) => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -206,7 +224,55 @@ function Cashflow({ onClose }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  // 貯金を保存
+  const saveSavings = useCallback(async (amount, year, month) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      setLoading(true)
+
+      // 既存データを確認
+      const { data: existingData } = await supabase
+        .from('savings')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('year', year)
+        .eq('month', month)
+        .single()
+
+      if (existingData) {
+        // 更新
+        const { error } = await supabase
+          .from('savings')
+          .update({
+            amount: amount || 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingData.id)
+
+        if (error) throw error
+      } else {
+        // 新規作成
+        const { error } = await supabase
+          .from('savings')
+          .insert({
+            user_id: session.user.id,
+            year,
+            month,
+            amount: amount || 0,
+          })
+
+        if (error) throw error
+      }
+    } catch (error) {
+      console.error('貯金保存エラー:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   // 月が変更されたときにデータを読み込む
   useEffect(() => {
@@ -219,10 +285,12 @@ function Cashflow({ onClose }) {
       if (expenseItems.length > 0 || incomeItems.length > 0) {
         saveItems(expenseItems, incomeItems, selectedYear, selectedMonth)
       }
+      // 貯金も自動保存
+      saveSavings(savingsAmount, selectedYear, selectedMonth)
     }, 1000) // 1秒後に自動保存
 
     return () => clearTimeout(timer)
-  }, [expenseItems, incomeItems, selectedYear, selectedMonth])
+  }, [expenseItems, incomeItems, savingsAmount, selectedYear, selectedMonth, saveSavings])
 
   // 項目を追加
   const addItem = (type) => {
@@ -423,6 +491,24 @@ function Cashflow({ onClose }) {
                 + 収入項目を追加
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* 貯金 */}
+        <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">貯金</h2>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              inputMode="decimal"
+              value={savingsAmount || ''}
+              onChange={(e) => setSavingsAmount(parseFloat(e.target.value) || 0)}
+              placeholder="0"
+              className="flex-1 px-4 py-3 text-lg border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent text-right"
+              min="0"
+              step="1"
+            />
+            <span className="text-gray-600 font-medium">円</span>
           </div>
         </div>
 
