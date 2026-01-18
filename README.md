@@ -1,6 +1,7 @@
 # 家計簿2025
 
 React、Tailwind CSS、Supabaseを使用した家計簿管理アプリです。
+URL：https://kakeibo2025.vercel.app/
 
 ## 機能
 
