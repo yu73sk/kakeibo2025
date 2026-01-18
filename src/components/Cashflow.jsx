@@ -654,9 +654,9 @@ function Cashflow({ onClose }) {
                   type="monotone"
                   dataKey="balance"
                   name="収支"
-                  stroke="#9ca3af"
+                  stroke="#f97316"
                   strokeWidth={2}
-                  dot={{ r: 4, fill: '#9ca3af' }}
+                  dot={{ r: 4, fill: '#f97316' }}
                   activeDot={{ r: 6 }}
                 />
               </ComposedChart>
