@@ -497,18 +497,22 @@ function Cashflow({ onClose }) {
         {/* 貯金 */}
         <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-700 mb-4">貯金</h2>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={savingsAmount || ''}
-              onChange={(e) => setSavingsAmount(parseFloat(e.target.value) || 0)}
-              placeholder="0"
-              className="flex-1 px-4 py-3 text-lg border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent text-right"
-              min="0"
-              step="1"
-            />
-            <span className="text-gray-600 font-medium">円</span>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 py-1.5 px-2 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <span className="text-xs font-semibold text-gray-800">貯金</span>
+              </div>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={savingsAmount || ''}
+                onChange={(e) => setSavingsAmount(parseFloat(e.target.value) || 0)}
+                placeholder="0"
+                className="w-20 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 text-xs text-right"
+                min="0"
+                step="1"
+              />
+            </div>
           </div>
         </div>
 
