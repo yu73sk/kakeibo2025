@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 // プリセット項目
 const PRESET_EXPENSE_CATEGORIES = ['家賃', 'ローン', '楽天', 'PayPay', 'ANA', 'Amazon']
@@ -12,6 +13,7 @@ function Cashflow({ onClose }) {
   const [incomeItems, setIncomeItems] = useState([])
   const [savingsAmount, setSavingsAmount] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [chartData, setChartData] = useState([])
 
   // 利用可能な年月のリストを生成
   const getAvailableMonths = () => {
@@ -274,10 +276,68 @@ function Cashflow({ onClose }) {
     }
   }, [])
 
+  // 1月〜12月のグラフデータを読み込む
+  const loadChartData = useCallback(async (year) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      // 1月〜12月のデータを取得
+      const { data, error } = await supabase
+        .from('cashflow')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('year', year)
+        .order('month', { ascending: true })
+
+      if (error) throw error
+
+      // 月ごとにデータを集計
+      const monthlyData = {}
+      for (let month = 1; month <= 12; month++) {
+        monthlyData[month] = { income: 0, expense: 0 }
+      }
+
+      if (data) {
+        data.forEach(item => {
+          const month = item.month
+          if (item.type === 'income') {
+            monthlyData[month].income += parseFloat(item.amount) || 0
+          } else if (item.type === 'expense') {
+            monthlyData[month].expense += parseFloat(item.amount) || 0
+          }
+        })
+      }
+
+      // グラフ用データを生成（データがある月のみ）
+      const chartDataArray = []
+      for (let month = 1; month <= 12; month++) {
+        const income = monthlyData[month].income
+        const expense = monthlyData[month].expense
+        const balance = income - expense
+
+        // データがある月のみ追加（収入または支出が0より大きい）
+        if (income > 0 || expense > 0) {
+          chartDataArray.push({
+            month: `${month}月`,
+            income: income,
+            expense: -expense, // 支出は負の値で下方向に表示（0を起点）
+            balance: balance,
+          })
+        }
+      }
+
+      setChartData(chartDataArray)
+    } catch (error) {
+      console.error('グラフデータ読み込みエラー:', error)
+    }
+  }, [])
+
   // 月が変更されたときにデータを読み込む
   useEffect(() => {
     loadCashflow(selectedYear, selectedMonth)
-  }, [selectedYear, selectedMonth, loadCashflow])
+    loadChartData(selectedYear)
+  }, [selectedYear, selectedMonth, loadCashflow, loadChartData])
 
   // 自動保存（デバウンス付き）
   useEffect(() => {
@@ -518,6 +578,90 @@ function Cashflow({ onClose }) {
 
         {loading && (
           <div className="text-center text-sm text-gray-500 mt-4">保存中...</div>
+        )}
+
+        {/* 月ごとの収支推移グラフ */}
+        {chartData.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">月ごとの収支推移</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                barCategoryGap={0}
+                barGap={0}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  stroke="#9ca3af"
+                />
+                <YAxis
+                  tick={{ fontSize: 12, fill: '#6b7280' }}
+                  stroke="#9ca3af"
+                  tickFormatter={(value) => {
+                    if (value === 0) return '0'
+                    return new Intl.NumberFormat('ja-JP', {
+                      style: 'currency',
+                      currency: 'JPY',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(Math.abs(value))
+                  }}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload
+                      return (
+                        <div className="bg-white p-3 border border-gray-300 rounded-lg shadow-lg">
+                          <p className="text-sm font-semibold text-gray-700 mb-1">{data.month}</p>
+                          <p className="text-xs text-green-600">
+                            収入: {formatCurrency(data.income)}
+                          </p>
+                          <p className="text-xs text-red-600">
+                            支出: {formatCurrency(-data.expense)}
+                          </p>
+                          <p className="text-xs font-semibold text-gray-800 mt-1">
+                            収支: {formatCurrency(data.balance)}
+                          </p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '12px' }}
+                  iconType="line"
+                />
+                <Bar
+                  dataKey="income"
+                  name="収入"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                  barSize={20}
+                />
+                <Bar
+                  dataKey="expense"
+                  name="支出"
+                  fill="#ef4444"
+                  radius={[0, 0, 4, 4]}
+                  barSize={20}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="balance"
+                  name="収支"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: '#9ca3af' }}
+                  activeDot={{ r: 6 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
     </div>
