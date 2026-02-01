@@ -276,66 +276,88 @@ function Cashflow({ onClose }) {
     }
   }, [])
 
-  // 1月〜12月のグラフデータを読み込む
-  const loadChartData = useCallback(async (year) => {
+  // グラフデータを読み込む（当月＋過去4ヶ月＋来月の6ヶ月分）
+  const loadChartData = useCallback(async (year, month) => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      // 1月〜12月のデータを取得
-      const { data, error } = await supabase
-        .from('cashflow')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('year', year)
-        .order('month', { ascending: true })
+      // 表示する月の範囲を計算（過去5ヶ月から当月まで）
+      const monthsToShow = []
+      for (let i = -5; i <= 0; i++) {
+        const date = new Date(year, month - 1 + i, 1)
+        monthsToShow.push({
+          year: date.getFullYear(),
+          month: date.getMonth() + 1,
+        })
+      }
 
-      if (error) throw error
+      // 各月のデータを取得
+      const allData = []
+      const allSavingsData = []
 
-      // 貯金データを取得
-      const { data: savingsData, error: savingsError } = await supabase
-        .from('savings')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('year', year)
-        .order('month', { ascending: true })
+      for (const { year: y, month: m } of monthsToShow) {
+        // キャッシュフローデータを取得
+        const { data, error } = await supabase
+          .from('cashflow')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('year', y)
+          .eq('month', m)
 
-      if (savingsError) {
-        console.error('貯金データ読み込みエラー:', savingsError)
+        if (error) throw error
+        if (data) {
+          allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
+        }
+
+        // 貯金データを取得
+        const { data: savingsData, error: savingsError } = await supabase
+          .from('savings')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('year', y)
+          .eq('month', m)
+          .single()
+
+        if (savingsError && savingsError.code !== 'PGRST116') {
+          console.error('貯金データ読み込みエラー:', savingsError)
+        } else if (savingsData) {
+          allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
+        }
       }
 
       // 月ごとにデータを集計
       const monthlyData = {}
-      for (let month = 1; month <= 12; month++) {
-        monthlyData[month] = { income: 0, expense: 0, savings: 0 }
-      }
+      monthsToShow.forEach(({ year: y, month: m }) => {
+        const key = `${y}-${m}`
+        monthlyData[key] = { year: y, month: m, income: 0, expense: 0, savings: 0 }
+      })
 
-      if (data) {
-        data.forEach(item => {
-          const month = item.month
-          if (item.type === 'income') {
-            monthlyData[month].income += parseFloat(item.amount) || 0
-          } else if (item.type === 'expense') {
-            monthlyData[month].expense += parseFloat(item.amount) || 0
-          }
-        })
-      }
+      // キャッシュフローデータを集計
+      allData.forEach(item => {
+        const key = `${item.dataYear}-${item.dataMonth}`
+        if (item.type === 'income') {
+          monthlyData[key].income += parseFloat(item.amount) || 0
+        } else if (item.type === 'expense') {
+          monthlyData[key].expense += parseFloat(item.amount) || 0
+        }
+      })
 
       // 貯金データを集計
-      if (savingsData) {
-        savingsData.forEach(item => {
-          const month = item.month
-          monthlyData[month].savings = parseFloat(item.amount) || 0
-        })
-      }
+      allSavingsData.forEach(item => {
+        const key = `${item.dataYear}-${item.dataMonth}`
+        monthlyData[key].savings = parseFloat(item.amount) || 0
+      })
 
-      // グラフ用データを生成（データがある月のみ）
+      // グラフ用データを生成（データがある月のみ、時系列順に）
       const chartDataArray = []
       let cumulativeSavings = 0
-      for (let month = 1; month <= 12; month++) {
-        const income = monthlyData[month].income
-        const expense = monthlyData[month].expense
-        const savings = monthlyData[month].savings
+      monthsToShow.forEach(({ year: y, month: m }) => {
+        const key = `${y}-${m}`
+        const data = monthlyData[key]
+        const income = data.income
+        const expense = data.expense
+        const savings = data.savings
         const balance = income - expense
         
         // 累積貯金額を計算
@@ -344,14 +366,14 @@ function Cashflow({ onClose }) {
         // データがある月のみ追加（収入、支出、または貯金が0より大きい）
         if (income > 0 || expense > 0 || savings > 0) {
           chartDataArray.push({
-            month: `${month}月`,
+            month: `${m}月`,
             income: income,
             expense: -expense, // 支出は負の値で下方向に表示（0を起点）
             balance: balance,
             savings: cumulativeSavings, // 累積貯金額
           })
         }
-      }
+      })
 
       setChartData(chartDataArray)
     } catch (error) {
@@ -362,7 +384,7 @@ function Cashflow({ onClose }) {
   // 月が変更されたときにデータを読み込む
   useEffect(() => {
     loadCashflow(selectedYear, selectedMonth)
-    loadChartData(selectedYear)
+    loadChartData(selectedYear, selectedMonth)
   }, [selectedYear, selectedMonth, loadCashflow, loadChartData])
 
   // 自動保存（デバウンス付き）
@@ -614,7 +636,7 @@ function Cashflow({ onClose }) {
               <ComposedChart
                 data={chartData}
                 margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                barCategoryGap={0}
+                barCategoryGap="5%"
                 barGap={0}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
