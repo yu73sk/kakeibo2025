@@ -292,10 +292,22 @@ function Cashflow({ onClose }) {
 
       if (error) throw error
 
+      // 貯金データを取得
+      const { data: savingsData, error: savingsError } = await supabase
+        .from('savings')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('year', year)
+        .order('month', { ascending: true })
+
+      if (savingsError) {
+        console.error('貯金データ読み込みエラー:', savingsError)
+      }
+
       // 月ごとにデータを集計
       const monthlyData = {}
       for (let month = 1; month <= 12; month++) {
-        monthlyData[month] = { income: 0, expense: 0 }
+        monthlyData[month] = { income: 0, expense: 0, savings: 0 }
       }
 
       if (data) {
@@ -309,20 +321,34 @@ function Cashflow({ onClose }) {
         })
       }
 
+      // 貯金データを集計
+      if (savingsData) {
+        savingsData.forEach(item => {
+          const month = item.month
+          monthlyData[month].savings = parseFloat(item.amount) || 0
+        })
+      }
+
       // グラフ用データを生成（データがある月のみ）
       const chartDataArray = []
+      let cumulativeSavings = 0
       for (let month = 1; month <= 12; month++) {
         const income = monthlyData[month].income
         const expense = monthlyData[month].expense
+        const savings = monthlyData[month].savings
         const balance = income - expense
+        
+        // 累積貯金額を計算
+        cumulativeSavings += savings
 
-        // データがある月のみ追加（収入または支出が0より大きい）
-        if (income > 0 || expense > 0) {
+        // データがある月のみ追加（収入、支出、または貯金が0より大きい）
+        if (income > 0 || expense > 0 || savings > 0) {
           chartDataArray.push({
             month: `${month}月`,
             income: income,
             expense: -expense, // 支出は負の値で下方向に表示（0を起点）
             balance: balance,
+            savings: cumulativeSavings, // 累積貯金額
           })
         }
       }
@@ -626,6 +652,11 @@ function Cashflow({ onClose }) {
                           <p className="text-xs font-semibold text-gray-800 mt-1">
                             収支: {formatCurrency(data.balance)}
                           </p>
+                          {data.savings > 0 && (
+                            <p className="text-xs text-green-600 mt-1">
+                              貯金: {formatCurrency(data.savings)}
+                            </p>
+                          )}
                         </div>
                       )
                     }
@@ -657,6 +688,15 @@ function Cashflow({ onClose }) {
                   stroke="#f97316"
                   strokeWidth={2}
                   dot={{ r: 4, fill: '#f97316' }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="savings"
+                  name="貯金"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: '#10b981' }}
                   activeDot={{ r: 6 }}
                 />
               </ComposedChart>
