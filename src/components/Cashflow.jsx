@@ -94,10 +94,12 @@ function Cashflow({ onClose }) {
         setSavingsAmount(0)
       }
 
-      // データがない場合、前月から引き継ぐ
-      if (expenses.length === 0 && incomes.length === 0) {
-        await loadPreviousMonthData(year, month)
-      } else {
+      // データが存在するかどうかを厳密にチェック
+      // dataが存在し、かつ空配列でない場合は、データが存在すると判断
+      const hasData = data && data.length > 0
+
+      if (hasData) {
+        // データが存在する場合は、それを読み込む（金額が0でもデータは存在する）
         const expenseItemsData = expenses.map(item => ({
           id: item.id,
           name: item.category_name,
@@ -113,6 +115,9 @@ function Cashflow({ onClose }) {
         // 固定費を上にソート
         setExpenseItems(sortItems(expenseItemsData))
         setIncomeItems(sortItems(incomeItemsData))
+      } else {
+        // データが存在しない場合のみ、前月から引き継ぐ
+        await loadPreviousMonthData(year, month)
       }
     } catch (error) {
       console.error('キャッシュフロー読み込みエラー:', error)
@@ -124,6 +129,44 @@ function Cashflow({ onClose }) {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
+
+      // 既存データを再確認（念のため、より厳密にチェック）
+      const { data: existingData, error: existingError } = await supabase
+        .from('cashflow')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('year', year)
+        .eq('month', month)
+
+      if (existingError) {
+        console.error('既存データ確認エラー:', existingError)
+        // エラーが発生した場合は、前月から引き継ぐ処理を中断
+        setExpenseItems([])
+        setIncomeItems([])
+        return
+      }
+
+      // 既存データが存在する場合（データが1件以上ある場合）
+      if (existingData && existingData.length > 0) {
+        // 既存データがある場合は、それを読み込んで終了（前月から引き継がない）
+        const expenses = existingData.filter(item => item.type === 'expense')
+        const incomes = existingData.filter(item => item.type === 'income')
+        const expenseItemsData = expenses.map(item => ({
+          id: item.id,
+          name: item.category_name,
+          amount: parseFloat(item.amount) || 0,
+          isFixed: item.is_fixed || false,
+        }))
+        const incomeItemsData = incomes.map(item => ({
+          id: item.id,
+          name: item.category_name,
+          amount: parseFloat(item.amount) || 0,
+          isFixed: item.is_fixed || false,
+        }))
+        setExpenseItems(sortItems(expenseItemsData))
+        setIncomeItems(sortItems(incomeItemsData))
+        return
+      }
 
       // 前月を計算
       const prevDate = new Date(year, month - 2, 1)
@@ -182,19 +225,17 @@ function Cashflow({ onClose }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      setLoading(true)
-
-      // 既存データを削除
-      await supabase
+      // 既存データを確認
+      const { data: existingData } = await supabase
         .from('cashflow')
-        .delete()
+        .select('*')
         .eq('user_id', session.user.id)
         .eq('year', year)
         .eq('month', month)
 
-      // 新しいデータを挿入
+      // 新しいデータを準備
       const itemsToInsert = [
-        ...expenses.map(item => ({
+        ...expenses.filter(item => item.name && item.name.trim() !== '').map(item => ({
           user_id: session.user.id,
           year,
           month,
@@ -203,7 +244,7 @@ function Cashflow({ onClose }) {
           amount: item.amount || 0,
           is_fixed: item.isFixed || false,
         })),
-        ...incomes.map(item => ({
+        ...incomes.filter(item => item.name && item.name.trim() !== '').map(item => ({
           user_id: session.user.id,
           year,
           month,
@@ -214,12 +255,40 @@ function Cashflow({ onClose }) {
         })),
       ]
 
-      if (itemsToInsert.length > 0) {
-        const { error } = await supabase
-          .from('cashflow')
-          .insert(itemsToInsert)
+      // 既存データがある場合とない場合で処理を分ける
+      if (existingData && existingData.length > 0) {
+        // 既存データがある場合：削除してから挿入（更新処理）
+        // ただし、新しいデータが空の場合は既存データを保持
+        if (itemsToInsert.length > 0) {
+          setLoading(true)
+          
+          // 既存データを削除
+          await supabase
+            .from('cashflow')
+            .delete()
+            .eq('user_id', session.user.id)
+            .eq('year', year)
+            .eq('month', month)
 
-        if (error) throw error
+          // 新しいデータを挿入
+          const { error } = await supabase
+            .from('cashflow')
+            .insert(itemsToInsert)
+
+          if (error) throw error
+        }
+        // 新しいデータが空の場合は、既存データを保持（削除しない）
+      } else {
+        // 既存データがない場合：新しいデータがある場合のみ挿入
+        if (itemsToInsert.length > 0) {
+          setLoading(true)
+          
+          const { error } = await supabase
+            .from('cashflow')
+            .insert(itemsToInsert)
+
+          if (error) throw error
+        }
       }
     } catch (error) {
       console.error('保存エラー:', error)
@@ -390,7 +459,12 @@ function Cashflow({ onClose }) {
   // 自動保存（デバウンス付き）
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (expenseItems.length > 0 || incomeItems.length > 0) {
+      // 有効なデータ（項目名が入力されているもの）がある場合のみ保存
+      const hasValidExpenses = expenseItems.some(item => item.name && item.name.trim() !== '')
+      const hasValidIncomes = incomeItems.some(item => item.name && item.name.trim() !== '')
+      
+      // 有効なデータがある場合のみ保存（項目名が空の項目だけの場合は保存しない）
+      if (hasValidExpenses || hasValidIncomes) {
         saveItems(expenseItems, incomeItems, selectedYear, selectedMonth)
       }
       // 貯金も自動保存
@@ -398,7 +472,7 @@ function Cashflow({ onClose }) {
     }, 1000) // 1秒後に自動保存
 
     return () => clearTimeout(timer)
-  }, [expenseItems, incomeItems, savingsAmount, selectedYear, selectedMonth, saveSavings])
+  }, [expenseItems, incomeItems, savingsAmount, selectedYear, selectedMonth, saveSavings, saveItems])
 
   // 項目を追加
   const addItem = (type) => {
