@@ -676,9 +676,9 @@ function Cashflow({ onClose }) {
           </div>
         </div>
 
-        {/* 貯金 */}
+        {/* キャッシュ */}
         <div className="bg-white rounded-2xl p-6 mb-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">貯金</h2>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">キャッシュ</h2>
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 py-1.5 px-2 bg-gray-50 rounded-lg">
               <div className="flex-1">
