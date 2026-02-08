@@ -14,31 +14,68 @@ function Cashflow({ onClose }) {
   const [savingsAmount, setSavingsAmount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [chartData, setChartData] = useState([])
+  const [availableMonths, setAvailableMonths] = useState([])
 
-  // 利用可能な年月のリストを生成
-  const getAvailableMonths = () => {
-    const months = []
-    const today = new Date()
-    const currentYear = today.getFullYear()
-    const currentMonth = today.getMonth() + 1
+  // データがある月のリストを取得
+  const loadAvailableMonths = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-    // 過去12ヶ月から未来3ヶ月まで
-    for (let i = 12; i >= 0; i--) {
-      const date = new Date(currentYear, currentMonth - i - 1, 1)
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      months.push({ year, month, label: `${year}年${month}月` })
+      // cashflowテーブルからデータがある年月を取得
+      const { data: cashflowData, error: cashflowError } = await supabase
+        .from('cashflow')
+        .select('year, month')
+        .eq('user_id', session.user.id)
+
+      if (cashflowError) {
+        console.error('利用可能な月の取得エラー（cashflow）:', cashflowError)
+      }
+
+      // savingsテーブルからデータがある年月を取得
+      const { data: savingsData, error: savingsError } = await supabase
+        .from('savings')
+        .select('year, month')
+        .eq('user_id', session.user.id)
+
+      if (savingsError) {
+        console.error('利用可能な月の取得エラー（savings）:', savingsError)
+      }
+
+      // 年月の組み合わせをSetで管理（重複を除去）
+      const monthSet = new Set()
+
+      if (cashflowData) {
+        cashflowData.forEach(item => {
+          monthSet.add(`${item.year}-${item.month}`)
+        })
+      }
+
+      if (savingsData) {
+        savingsData.forEach(item => {
+          monthSet.add(`${item.year}-${item.month}`)
+        })
+      }
+
+      // Setを配列に変換してソート
+      const months = Array.from(monthSet)
+        .map(key => {
+          const [year, month] = key.split('-').map(Number)
+          return { year, month, label: `${year}年${month}月` }
+        })
+        .sort((a, b) => {
+          // 年でソート、同じ年の場合は月でソート
+          if (a.year !== b.year) {
+            return b.year - a.year // 新しい年が先
+          }
+          return b.month - a.month // 新しい月が先
+        })
+
+      setAvailableMonths(months)
+    } catch (error) {
+      console.error('利用可能な月の取得エラー:', error)
     }
-
-    for (let i = 1; i <= 3; i++) {
-      const date = new Date(currentYear, currentMonth + i - 1, 1)
-      const year = date.getFullYear()
-      const month = date.getMonth() + 1
-      months.push({ year, month, label: `${year}年${month}月` })
-    }
-
-    return months
-  }
+  }, [])
 
   // 項目をソート（固定費を上に）
   const sortItems = (items) => {
@@ -348,8 +385,14 @@ function Cashflow({ onClose }) {
   // グラフデータを読み込む（当月＋過去4ヶ月＋来月の6ヶ月分）
   const loadChartData = useCallback(async (year, month) => {
     try {
+      console.log('loadChartData: 関数開始', { year, month })
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) {
+        console.log('loadChartData: セッションなし')
+        return
+      }
+
+      console.log('loadChartData: セッション取得完了', { year, month })
 
       // 表示する月の範囲を計算（過去5ヶ月から当月まで）
       const monthsToShow = []
@@ -360,38 +403,56 @@ function Cashflow({ onClose }) {
           month: date.getMonth() + 1,
         })
       }
+      console.log('loadChartData: 表示する月', monthsToShow)
 
       // 各月のデータを取得
       const allData = []
       const allSavingsData = []
 
       for (const { year: y, month: m } of monthsToShow) {
-        // キャッシュフローデータを取得
-        const { data, error } = await supabase
-          .from('cashflow')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .eq('year', y)
-          .eq('month', m)
+        try {
+          // キャッシュフローデータを取得
+          const { data, error } = await supabase
+            .from('cashflow')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .eq('year', y)
+            .eq('month', m)
 
-        if (error) throw error
-        if (data) {
-          allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
+          if (error) {
+            // エラーが発生しても処理を続行（データがない月として扱う）
+            console.warn(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得エラー（無視して続行）:`, error.code)
+          } else if (data && data.length > 0) {
+            console.log(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得`, data.length, '件')
+            allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
+          } else {
+            console.log(`loadChartData: ${y}年${m}月のキャッシュフローデータなし`)
+          }
+        } catch (error) {
+          console.warn(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得で例外（無視して続行）:`, error)
         }
 
-        // 貯金データを取得
-        const { data: savingsData, error: savingsError } = await supabase
-          .from('savings')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .eq('year', y)
-          .eq('month', m)
-          .single()
+        try {
+          // 貯金データを取得（エラーが発生しても処理を続行）
+          const { data: savingsData, error: savingsError } = await supabase
+            .from('savings')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .eq('year', y)
+            .eq('month', m)
+            .maybeSingle() // single()の代わりにmaybeSingle()を使用（データがない場合もエラーにならない）
 
-        if (savingsError && savingsError.code !== 'PGRST116') {
-          console.error('貯金データ読み込みエラー:', savingsError)
-        } else if (savingsData) {
-          allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
+          if (savingsError) {
+            // エラーを無視して処理を続行
+            if (savingsError.code !== 'PGRST116') {
+              console.warn(`loadChartData: ${y}年${m}月の貯金データ読み込みエラー（無視して続行）:`, savingsError.code)
+            }
+          } else if (savingsData) {
+            console.log(`loadChartData: ${y}年${m}月の貯金データ取得`, savingsData.amount)
+            allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
+          }
+        } catch (error) {
+          console.warn(`loadChartData: ${y}年${m}月の貯金データ取得で例外（無視して続行）:`, error)
         }
       }
 
@@ -433,7 +494,10 @@ function Cashflow({ onClose }) {
         cumulativeSavings += savings
 
         // データがある月のみ追加（収入、支出、または貯金が0より大きい）
-        if (income > 0 || expense > 0 || savings > 0) {
+        const shouldInclude = income > 0 || expense > 0 || savings > 0
+        console.log(`loadChartData: ${y}年${m}月`, { income, expense, savings, shouldInclude })
+        
+        if (shouldInclude) {
           chartDataArray.push({
             month: `${m}月`,
             income: income,
@@ -444,17 +508,45 @@ function Cashflow({ onClose }) {
         }
       })
 
+      console.log('loadChartData: グラフデータ', chartDataArray)
       setChartData(chartDataArray)
     } catch (error) {
       console.error('グラフデータ読み込みエラー:', error)
+      setChartData([]) // エラー時は空配列を設定
     }
   }, [])
 
+  // コンポーネントマウント時に利用可能な月を読み込む
+  useEffect(() => {
+    loadAvailableMonths()
+  }, [loadAvailableMonths])
+
   // 月が変更されたときにデータを読み込む
   useEffect(() => {
-    loadCashflow(selectedYear, selectedMonth)
-    loadChartData(selectedYear, selectedMonth)
+    console.log('useEffect: データ読み込み開始', { selectedYear, selectedMonth })
+    const loadData = async () => {
+      try {
+        await loadCashflow(selectedYear, selectedMonth)
+        await loadChartData(selectedYear, selectedMonth)
+        console.log('useEffect: データ読み込み完了', { selectedYear, selectedMonth })
+      } catch (error) {
+        console.error('useEffect: データ読み込みエラー', error)
+      }
+    }
+    loadData()
   }, [selectedYear, selectedMonth, loadCashflow, loadChartData])
+
+  // データ保存後に利用可能な月を更新
+  useEffect(() => {
+    if (expenseItems.length > 0 || incomeItems.length > 0 || savingsAmount > 0) {
+      // データが保存された後、利用可能な月のリストを更新
+      const timer = setTimeout(() => {
+        loadAvailableMonths()
+      }, 1500) // 保存後1.5秒後に更新
+
+      return () => clearTimeout(timer)
+    }
+  }, [expenseItems, incomeItems, savingsAmount, loadAvailableMonths])
 
   // 自動保存（デバウンス付き）
   useEffect(() => {
@@ -522,8 +614,6 @@ function Cashflow({ onClose }) {
       minimumFractionDigits: 0,
     }).format(value)
   }
-
-  const availableMonths = getAvailableMonths()
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
