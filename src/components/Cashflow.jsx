@@ -385,14 +385,8 @@ function Cashflow({ onClose }) {
   // グラフデータを読み込む（当月＋過去4ヶ月＋来月の6ヶ月分）
   const loadChartData = useCallback(async (year, month) => {
     try {
-      console.log('loadChartData: 関数開始', { year, month })
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        console.log('loadChartData: セッションなし')
-        return
-      }
-
-      console.log('loadChartData: セッション取得完了', { year, month })
+      if (!session) return
 
       // 表示する月の範囲を計算（過去5ヶ月から当月まで）
       const monthsToShow = []
@@ -403,7 +397,6 @@ function Cashflow({ onClose }) {
           month: date.getMonth() + 1,
         })
       }
-      console.log('loadChartData: 表示する月', monthsToShow)
 
       // 各月のデータを取得
       const allData = []
@@ -421,15 +414,11 @@ function Cashflow({ onClose }) {
 
           if (error) {
             // エラーが発生しても処理を続行（データがない月として扱う）
-            console.warn(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得エラー（無視して続行）:`, error.code)
           } else if (data && data.length > 0) {
-            console.log(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得`, data.length, '件')
             allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
-          } else {
-            console.log(`loadChartData: ${y}年${m}月のキャッシュフローデータなし`)
           }
         } catch (error) {
-          console.warn(`loadChartData: ${y}年${m}月のキャッシュフローデータ取得で例外（無視して続行）:`, error)
+          // エラーが発生しても処理を続行
         }
 
         try {
@@ -443,16 +432,12 @@ function Cashflow({ onClose }) {
             .maybeSingle() // single()の代わりにmaybeSingle()を使用（データがない場合もエラーにならない）
 
           if (savingsError) {
-            // エラーを無視して処理を続行
-            if (savingsError.code !== 'PGRST116') {
-              console.warn(`loadChartData: ${y}年${m}月の貯金データ読み込みエラー（無視して続行）:`, savingsError.code)
-            }
+            // エラーを無視して処理を続行（PGRST116は「データが見つからない」エラーなので無視）
           } else if (savingsData) {
-            console.log(`loadChartData: ${y}年${m}月の貯金データ取得`, savingsData.amount)
             allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
           }
         } catch (error) {
-          console.warn(`loadChartData: ${y}年${m}月の貯金データ取得で例外（無視して続行）:`, error)
+          // エラーが発生しても処理を続行
         }
       }
 
@@ -494,10 +479,7 @@ function Cashflow({ onClose }) {
         cumulativeSavings += savings
 
         // データがある月のみ追加（収入、支出、または貯金が0より大きい）
-        const shouldInclude = income > 0 || expense > 0 || savings > 0
-        console.log(`loadChartData: ${y}年${m}月`, { income, expense, savings, shouldInclude })
-        
-        if (shouldInclude) {
+        if (income > 0 || expense > 0 || savings > 0) {
           chartDataArray.push({
             month: `${m}月`,
             income: income,
@@ -508,7 +490,6 @@ function Cashflow({ onClose }) {
         }
       })
 
-      console.log('loadChartData: グラフデータ', chartDataArray)
       setChartData(chartDataArray)
     } catch (error) {
       console.error('グラフデータ読み込みエラー:', error)
@@ -523,14 +504,12 @@ function Cashflow({ onClose }) {
 
   // 月が変更されたときにデータを読み込む
   useEffect(() => {
-    console.log('useEffect: データ読み込み開始', { selectedYear, selectedMonth })
     const loadData = async () => {
       try {
         await loadCashflow(selectedYear, selectedMonth)
         await loadChartData(selectedYear, selectedMonth)
-        console.log('useEffect: データ読み込み完了', { selectedYear, selectedMonth })
       } catch (error) {
-        console.error('useEffect: データ読み込みエラー', error)
+        console.error('データ読み込みエラー', error)
       }
     }
     loadData()
