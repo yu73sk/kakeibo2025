@@ -57,6 +57,12 @@ function Cashflow({ onClose }) {
         })
       }
 
+      // DBにまだ行がない月は選べないため、当月・翌月は常に選択肢に含める（先取り入力用）
+      const now = new Date()
+      monthSet.add(`${now.getFullYear()}-${now.getMonth() + 1}`)
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      monthSet.add(`${next.getFullYear()}-${next.getMonth() + 1}`)
+
       // Setを配列に変換してソート
       const months = Array.from(monthSet)
         .map(key => {
@@ -382,16 +388,37 @@ function Cashflow({ onClose }) {
     }
   }, [])
 
-  // グラフデータを読み込む（当月＋過去4ヶ月＋来月の6ヶ月分）
+  // グラフデータを読み込む（直近6ヶ月。当月以降を見ているときは右端をカレンダー翌月まで延ばす）
   const loadChartData = useCallback(async (year, month) => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      // 表示する月の範囲を計算（過去5ヶ月から当月まで）
+      const monthCompare = (a, b) => {
+        if (a.year !== b.year) return a.year - b.year
+        return a.month - b.month
+      }
+      const monthMax = (a, b) => (monthCompare(a, b) >= 0 ? a : b)
+
+      const now = new Date()
+      const currentYM = { year: now.getFullYear(), month: now.getMonth() + 1 }
+      const nextCalDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      const nextCalYM = {
+        year: nextCalDate.getFullYear(),
+        month: nextCalDate.getMonth() + 1,
+      }
+      const selectedYM = { year, month }
+
+      // 過去月だけを見ているときは従来どおり選択月が右端。当月以降では翌月まで常に表示
+      const endYM =
+        monthCompare(selectedYM, currentYM) >= 0
+          ? monthMax(selectedYM, nextCalYM)
+          : selectedYM
+
+      const endDate = new Date(endYM.year, endYM.month - 1, 1)
       const monthsToShow = []
       for (let i = -5; i <= 0; i++) {
-        const date = new Date(year, month - 1 + i, 1)
+        const date = new Date(endDate.getFullYear(), endDate.getMonth() + i, 1)
         monthsToShow.push({
           year: date.getFullYear(),
           month: date.getMonth() + 1,
@@ -464,7 +491,7 @@ function Cashflow({ onClose }) {
         monthlyData[key].savings = parseFloat(item.amount) || 0
       })
 
-      // グラフ用データを生成（データがある月のみ、時系列順に）
+      // グラフ用データを生成（範囲内の月はすべて表示。未入力の翌月も軸に載せる）
       const chartDataArray = []
       let cumulativeSavings = 0
       monthsToShow.forEach(({ year: y, month: m }) => {
@@ -474,20 +501,16 @@ function Cashflow({ onClose }) {
         const expense = data.expense
         const savings = data.savings
         const balance = income - expense
-        
-        // 累積貯金額を計算
+
         cumulativeSavings += savings
 
-        // データがある月のみ追加（収入、支出、または貯金が0より大きい）
-        if (income > 0 || expense > 0 || savings > 0) {
-          chartDataArray.push({
-            month: `${m}月`,
-            income: income,
-            expense: -expense, // 支出は負の値で下方向に表示（0を起点）
-            balance: balance,
-            savings: cumulativeSavings, // 累積貯金額
-          })
-        }
+        chartDataArray.push({
+          month: `${m}月`,
+          income: income,
+          expense: -expense, // 支出は負の値で下方向に表示（0を起点）
+          balance: balance,
+          savings: cumulativeSavings, // 累積貯金額
+        })
       })
 
       setChartData(chartDataArray)
