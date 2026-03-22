@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
 import Settings from './components/Settings'
@@ -31,9 +31,7 @@ function App() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [todayBudget, setTodayBudget] = useState(0)
-  const [todayActual, setTodayActual] = useState(0)
   const [monthlyBudget, setMonthlyBudget] = useState(0)
-  const [monthlyActual, setMonthlyActual] = useState(0)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
   const [showOldTransactions, setShowOldTransactions] = useState(false)
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0'))
@@ -51,31 +49,20 @@ function App() {
   useEffect(() => {
     // 現在のセッションを取得
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('初期セッション取得:', session?.user?.id)
       setSession(session)
       setLoading(false)
-      if (session) {
-        loadUserSettings()
-        loadTransactions()
-      } else {
-        // セッションがない場合、状態をクリア
+      if (!session) {
         setTransactions([])
         setMonthlyBudgetSetting(0)
       }
     })
 
-    // 認証状態の変更を監視
+    // 認証状態の変更を監視（データ取得は session の useEffect に一本化して二重フェッチを防ぐ）
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('認証状態変更:', _event, session?.user?.id)
       setSession(session)
-      if (session) {
-        // セッションが変更されたら、データを再読み込み
-        loadTransactions()
-        loadUserSettings()
-      } else {
-        // ログアウト時は状態をクリア
+      if (!session) {
         setTransactions([])
         setMonthlyBudgetSetting(0)
       }
@@ -119,18 +106,6 @@ function App() {
     }
   }, [session, monthlyBudgetSetting])
 
-  // 取引履歴を読み込む
-  useEffect(() => {
-    if (session) {
-      loadTransactions()
-    }
-  }, [session])
-
-  // 今日の実績と今月の実績を計算
-  useEffect(() => {
-    calculateActuals()
-  }, [transactions])
-
   const loadTransactions = async () => {
     try {
       // セッションを明示的に取得
@@ -166,31 +141,44 @@ function App() {
     }
   }
 
-  const calculateActuals = () => {
+  // 取引一覧から実績を派生（再レンダーごとの二重計算と useEffect 連鎖を避ける）
+  const { todayActual, monthlyActual } = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
-    
-    // 今日の実績
-    const todayTotal = transactions
-      .filter(t => t.date === today)
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-    setTodayActual(todayTotal)
-
-    // 今月の実績（今日まで）
     const todayDate = new Date()
     const year = todayDate.getFullYear()
     const month = todayDate.getMonth() + 1
     const day = todayDate.getDate()
+    let todayTotal = 0
+    let monthlyTotal = 0
+    for (const t of transactions) {
+      const amt = parseFloat(t.amount || 0)
+      if (t.date === today) todayTotal += amt
+      const tDate = new Date(t.date)
+      if (
+        tDate.getFullYear() === year &&
+        tDate.getMonth() + 1 === month &&
+        tDate.getDate() <= day
+      ) {
+        monthlyTotal += amt
+      }
+    }
+    return { todayActual: todayTotal, monthlyActual: monthlyTotal }
+  }, [transactions])
 
-    const monthlyTotal = transactions
-      .filter(t => {
-        const tDate = new Date(t.date)
-        return tDate.getFullYear() === year && 
-               tDate.getMonth() + 1 === month && 
-               tDate.getDate() <= day
-      })
-      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-    setMonthlyActual(monthlyTotal)
-  }
+  const transactionSumByDate = useMemo(() => {
+    const map = new Map()
+    for (const t of transactions) {
+      const d = t.date
+      map.set(d, (map.get(d) || 0) + parseFloat(t.amount || 0))
+    }
+    return map
+  }, [transactions])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    loadTransactions()
+    loadUserSettings()
+  }, [session?.user?.id])
 
   // サンプルページでの編集操作を制限
   const handleDemoRestriction = () => {
@@ -727,24 +715,17 @@ function App() {
     return 'text-gray-600'
   }
 
-  // 日毎の予実データを生成
-  const getDailyBudgetData = (year, month) => {
+  // 日毎の予実データを生成（取引は日付→合計マップで参照し、月内の filter を避ける）
+  const getDailyBudgetData = (year, month, sumByDate) => {
     const daysInMonth = new Date(year, month, 0).getDate()
     const dailyData = []
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day)
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      
-      // 予算を計算（現在の予算設定を使用）
+
       const budget = calculateDailyBudget(date, monthlyBudgetSetting)
-      
-      // 実績を計算（その日の取引の合計）
-      const actual = transactions
-        .filter(t => t.date === dateStr)
-        .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
-      
-      // 差分
+      const actual = sumByDate.get(dateStr) || 0
       const difference = actual - budget
 
       dailyData.push({
@@ -761,18 +742,26 @@ function App() {
     return dailyData
   }
 
-  // 選択された月のデータを取得
-  const selectedYear = parseInt(selectedMonth.split('-')[0])
-  const selectedMonthNum = parseInt(selectedMonth.split('-')[1])
-  const dailyData = getDailyBudgetData(selectedYear, selectedMonthNum)
+  const selectedYear = parseInt(selectedMonth.split('-')[0], 10)
+  const selectedMonthNum = parseInt(selectedMonth.split('-')[1], 10)
 
-  // 合計値を計算
-  const totalBudget = dailyData.reduce((sum, day) => sum + day.budget, 0)
-  const totalActual = dailyData.reduce((sum, day) => sum + day.actual, 0)
+  const dailyData = useMemo(
+    () => getDailyBudgetData(selectedYear, selectedMonthNum, transactionSumByDate),
+    [selectedYear, selectedMonthNum, monthlyBudgetSetting, transactionSumByDate]
+  )
+
+  const totalBudget = useMemo(
+    () => dailyData.reduce((sum, day) => sum + day.budget, 0),
+    [dailyData]
+  )
+  const totalActual = useMemo(
+    () => dailyData.reduce((sum, day) => sum + day.actual, 0),
+    [dailyData]
+  )
   const totalDifference = totalActual - totalBudget
 
   // 週次予実進捗データを生成
-  const getWeeklyProgressData = (year, month) => {
+  const getWeeklyProgressData = (year, month, sumByDate) => {
     const daysInMonth = new Date(year, month, 0).getDate()
     const weeks = []
     
@@ -800,10 +789,7 @@ function App() {
         // 予算を計算
         weekBudget += calculateDailyBudget(date, monthlyBudgetSetting)
         
-        // 実績を計算
-        weekActual += transactions
-          .filter(t => t.date === dateStr)
-          .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0)
+        weekActual += sumByDate.get(dateStr) || 0
       }
 
       // 累積値を更新
@@ -834,22 +820,23 @@ function App() {
     return weeks
   }
 
-  // 今月の週次データを取得
   const today = new Date()
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth() + 1
-  const weeklyData = getWeeklyProgressData(currentYear, currentMonth)
 
-  // 表示可能な月のリストを生成（過去6ヶ月から未来3ヶ月まで）
-  const getAvailableMonths = () => {
+  const weeklyData = useMemo(
+    () => getWeeklyProgressData(currentYear, currentMonth, transactionSumByDate),
+    [currentYear, currentMonth, monthlyBudgetSetting, transactionSumByDate]
+  )
+
+  const availableMonths = useMemo(() => {
     const months = []
-    const today = new Date()
-    const currentYear = today.getFullYear()
-    const currentMonth = today.getMonth() + 1
+    const d = new Date()
+    const cy = d.getFullYear()
+    const cm = d.getMonth() + 1
 
-    // 過去6ヶ月
     for (let i = 6; i >= 1; i--) {
-      const date = new Date(currentYear, currentMonth - i - 1, 1)
+      const date = new Date(cy, cm - i - 1, 1)
       const year = date.getFullYear()
       const month = date.getMonth() + 1
       months.push({
@@ -858,15 +845,13 @@ function App() {
       })
     }
 
-    // 今月
     months.push({
-      value: `${currentYear}-${String(currentMonth).padStart(2, '0')}`,
-      label: `${currentYear}年${currentMonth}月`,
+      value: `${cy}-${String(cm).padStart(2, '0')}`,
+      label: `${cy}年${cm}月`,
     })
 
-    // 未来3ヶ月
     for (let i = 1; i <= 3; i++) {
-      const date = new Date(currentYear, currentMonth + i - 1, 1)
+      const date = new Date(cy, cm + i - 1, 1)
       const year = date.getFullYear()
       const month = date.getMonth() + 1
       months.push({
@@ -876,24 +861,15 @@ function App() {
     }
 
     return months
-  }
+  }, [])
 
-  const availableMonths = getAvailableMonths()
-
-  // ユーザー名を取得（メールアドレスの@以前の部分）
-  const getUserName = () => {
-    if (!session || !session.user || !session.user.email) {
-      return 'ゲスト'
-    }
+  const userName = useMemo(() => {
+    if (!session?.user?.email) return 'ゲスト'
     const email = session.user.email
     const atIndex = email.indexOf('@')
-    if (atIndex === -1) {
-      return 'ゲスト'
-    }
+    if (atIndex === -1) return 'ゲスト'
     return email.substring(0, atIndex)
-  }
-
-  const userName = getUserName()
+  }, [session?.user?.email])
 
   // ローディング中
   if (loading) {

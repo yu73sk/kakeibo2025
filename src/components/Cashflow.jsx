@@ -22,22 +22,15 @@ function Cashflow({ onClose }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      // cashflowテーブルからデータがある年月を取得
-      const { data: cashflowData, error: cashflowError } = await supabase
-        .from('cashflow')
-        .select('year, month')
-        .eq('user_id', session.user.id)
+      const [{ data: cashflowData, error: cashflowError }, { data: savingsData, error: savingsError }] =
+        await Promise.all([
+          supabase.from('cashflow').select('year, month').eq('user_id', session.user.id),
+          supabase.from('savings').select('year, month').eq('user_id', session.user.id),
+        ])
 
       if (cashflowError) {
         console.error('利用可能な月の取得エラー（cashflow）:', cashflowError)
       }
-
-      // savingsテーブルからデータがある年月を取得
-      const { data: savingsData, error: savingsError } = await supabase
-        .from('savings')
-        .select('year, month')
-        .eq('user_id', session.user.id)
-
       if (savingsError) {
         console.error('利用可能な月の取得エラー（savings）:', savingsError)
       }
@@ -106,28 +99,28 @@ function Cashflow({ onClose }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      const { data, error } = await supabase
-        .from('cashflow')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('year', year)
-        .eq('month', month)
-        .order('type', { ascending: false })
-        .order('category_name', { ascending: true })
+      const [{ data, error }, { data: savingsData, error: savingsError }] = await Promise.all([
+        supabase
+          .from('cashflow')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('year', year)
+          .eq('month', month)
+          .order('type', { ascending: false })
+          .order('category_name', { ascending: true }),
+        supabase
+          .from('savings')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .eq('year', year)
+          .eq('month', month)
+          .maybeSingle(),
+      ])
 
       if (error) throw error
 
       const expenses = (data || []).filter(item => item.type === 'expense')
       const incomes = (data || []).filter(item => item.type === 'income')
-
-      // 貯金データを読み込む
-      const { data: savingsData, error: savingsError } = await supabase
-        .from('savings')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('year', year)
-        .eq('month', month)
-        .single()
 
       if (savingsError && savingsError.code !== 'PGRST116') {
         console.error('貯金読み込みエラー:', savingsError)
@@ -429,42 +422,34 @@ function Cashflow({ onClose }) {
       const allData = []
       const allSavingsData = []
 
-      for (const { year: y, month: m } of monthsToShow) {
-        try {
-          // キャッシュフローデータを取得
-          const { data, error } = await supabase
-            .from('cashflow')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .eq('year', y)
-            .eq('month', m)
+      const monthResults = await Promise.all(
+        monthsToShow.map(({ year: y, month: m }) =>
+          Promise.all([
+            supabase
+              .from('cashflow')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .eq('year', y)
+              .eq('month', m),
+            supabase
+              .from('savings')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .eq('year', y)
+              .eq('month', m)
+              .maybeSingle(),
+          ]).then(([cashRes, savRes]) => ({ y, m, cashRes, savRes }))
+        )
+      )
 
-          if (error) {
-            // エラーが発生しても処理を続行（データがない月として扱う）
-          } else if (data && data.length > 0) {
-            allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
-          }
-        } catch (error) {
-          // エラーが発生しても処理を続行
+      for (const { y, m, cashRes, savRes } of monthResults) {
+        const { data, error } = cashRes
+        if (!error && data && data.length > 0) {
+          allData.push(...data.map(item => ({ ...item, dataYear: y, dataMonth: m })))
         }
-
-        try {
-          // 貯金データを取得（エラーが発生しても処理を続行）
-          const { data: savingsData, error: savingsError } = await supabase
-            .from('savings')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .eq('year', y)
-            .eq('month', m)
-            .maybeSingle() // single()の代わりにmaybeSingle()を使用（データがない場合もエラーにならない）
-
-          if (savingsError) {
-            // エラーを無視して処理を続行（PGRST116は「データが見つからない」エラーなので無視）
-          } else if (savingsData) {
-            allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
-          }
-        } catch (error) {
-          // エラーが発生しても処理を続行
+        const { data: savingsData, error: savingsError } = savRes
+        if (!savingsError && savingsData) {
+          allSavingsData.push({ ...savingsData, dataYear: y, dataMonth: m })
         }
       }
 
@@ -529,6 +514,7 @@ function Cashflow({ onClose }) {
   useEffect(() => {
     const loadData = async () => {
       try {
+        // 前月引き継ぎで保存が走る場合があるため、グラフは loadCashflow の後に読む
         await loadCashflow(selectedYear, selectedMonth)
         await loadChartData(selectedYear, selectedMonth)
       } catch (error) {
